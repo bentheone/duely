@@ -85,7 +85,7 @@ export function Screen({
     ) : null;
   const top = header ? 12 : padTop ? insets.top + SPACE.screenTop - 16 : insets.top + 12;
   const content = (
-    <View style={scroll ? { paddingHorizontal: SPACE.screenX, paddingTop: top, paddingBottom: 120 } : { flex: 1, paddingHorizontal: SPACE.screenX, paddingTop: top, paddingBottom: 24 }}>{children}</View>
+    <View style={scroll ? { paddingHorizontal: SPACE.screenX, paddingTop: top, paddingBottom: Math.max(120, insets.bottom + 112) } : { flex: 1, paddingHorizontal: SPACE.screenX, paddingTop: top, paddingBottom: 24 }}>{children}</View>
   );
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
