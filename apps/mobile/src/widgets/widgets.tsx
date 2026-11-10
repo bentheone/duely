@@ -1,3 +1,7 @@
+// The widget library calls these components as plain functions (no React renderer), so the
+// React Compiler's memo hooks would throw "Invalid hook call" and the widget would stay blank.
+"use no memo";
+
 import React from 'react';
 import { FlexWidget, TextWidget } from 'react-native-android-widget';
 import { darkenForWhiteText } from '@duely/shared';
@@ -22,14 +26,15 @@ export function NextWidget({ data }: { data: WidgetData }) {
     >
       <FlexWidget style={{ flexDirection: 'row', width: 'match_parent', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <FlexWidget style={{ flexDirection: 'column', flex: 1 }}>
+          {/* No fragments: the widget tree builder only accepts widget elements. */}
           {data.next ? (
-            <>
-              <FlexWidget style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <FlexWidget style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: hex(data.next.color), marginRight: 6 }} />
-                <TextWidget text={data.next.label} maxLines={1} style={{ fontSize: 14, color: p.muted, fontFamily: 'Inter' }} />
-              </FlexWidget>
-              <TextWidget text={data.next.time} style={{ fontSize: 34, color: p.text, fontWeight: '600' }} />
-            </>
+            <FlexWidget style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <FlexWidget style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: hex(data.next.color), marginRight: 6 }} />
+              <TextWidget text={data.next.label} maxLines={1} style={{ fontSize: 14, color: p.muted }} />
+            </FlexWidget>
+          ) : null}
+          {data.next ? (
+            <TextWidget text={data.next.time} style={{ fontSize: 34, color: p.text, fontWeight: '600' }} />
           ) : (
             <TextWidget text="Nothing next" style={{ fontSize: 20, color: p.muted }} />
           )}
@@ -86,6 +91,19 @@ export function ExamWidget({ data }: { data: WidgetData }) {
     >
       <TextWidget text={data.exam ? `${data.exam.days}d` : '—'} style={{ fontSize: 48, color: fg, fontWeight: '600' }} />
       <TextWidget text={data.exam ? data.exam.label : 'No exams'} maxLines={1} style={{ fontSize: 14, color: fg }} />
+    </FlexWidget>
+  );
+}
+
+/** Shown if widget data can't be read (e.g. before first sign-in finishes). */
+export function FallbackWidget() {
+  const p = palette('light');
+  return (
+    <FlexWidget
+      clickAction="OPEN_APP"
+      style={{ height: 'match_parent', width: 'match_parent', backgroundColor: p.bg, borderRadius: 24, padding: 18, justifyContent: 'center', alignItems: 'center' }}
+    >
+      <TextWidget text="Open Duely" style={{ fontSize: 16, color: p.text }} />
     </FlexWidget>
   );
 }

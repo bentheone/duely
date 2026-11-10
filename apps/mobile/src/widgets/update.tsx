@@ -1,3 +1,5 @@
+"use no memo";
+
 import React from 'react';
 import { Platform } from 'react-native';
 import { requestWidgetUpdate } from 'react-native-android-widget';

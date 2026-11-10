@@ -1,7 +1,9 @@
+"use no memo";
+
 import React from 'react';
 import type { WidgetTaskHandlerProps } from 'react-native-android-widget';
 import { widgetData } from './data';
-import { WIDGETS, type WidgetName } from './widgets';
+import { FallbackWidget, WIDGETS, type WidgetName } from './widgets';
 
 /** Headless task: renders widgets on add/update/resize (every 30 min via updatePeriodMillis). */
 export async function widgetTaskHandler(props: WidgetTaskHandlerProps): Promise<void> {
@@ -13,7 +15,13 @@ export async function widgetTaskHandler(props: WidgetTaskHandlerProps): Promise<
     case 'WIDGET_UPDATE':
     case 'WIDGET_RESIZED':
     case 'WIDGET_CLICK':
-      props.renderWidget(<Comp data={widgetData()} />);
+      try {
+        props.renderWidget(<Comp data={widgetData()} />);
+      } catch (e) {
+        // Never leave the widget blank: show a tappable placeholder instead.
+        console.error('[duely-widget]', name, (e as Error).message);
+        props.renderWidget(<FallbackWidget />);
+      }
       break;
     default:
       break;
