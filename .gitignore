@@ -1,8 +1,9 @@
 node_modules/
 dist/
 .expo/
-android/
-ios/
+# Generated native projects (CNG) — only the app's. modules/*/android holds real Kotlin source.
+/apps/mobile/android/
+/apps/mobile/ios/
 *.log
 .env
 .env.*
@@ -10,3 +11,6 @@ ios/
 .vercel/
 coverage/
 *.tsbuildinfo
+modules/*/android/build/
+modules/*/android/.gradle/
+modules/*/android/.cxx/

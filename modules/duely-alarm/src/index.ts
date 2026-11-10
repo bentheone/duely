@@ -14,6 +14,12 @@ export interface AlarmActionEvent {
   action: 'stop' | 'snooze';
 }
 
+export interface NextAlarm {
+  id: string;
+  triggerAt: number;
+  title: string;
+}
+
 export interface AlarmOptions {
   snoozeMinutes: number;
   ringOnSilent: boolean;
@@ -28,6 +34,11 @@ interface NativeAlarm {
   canScheduleExact(): Promise<boolean>;
   openExactAlarmSettings(): void;
   consumePendingActions(): Promise<AlarmActionEvent[]>;
+  isIgnoringBatteryOptimizations(): Promise<boolean>;
+  openBatterySettings(): void;
+  testAlarm(inSeconds: number): Promise<void>;
+  nextAlarm(): Promise<NextAlarm | null>;
+  consumeNativeCrash(): Promise<string | null>;
   addListener(event: 'alarmAction', cb: (e: AlarmActionEvent) => void): EventSubscription;
 }
 
@@ -68,4 +79,24 @@ export function addListener(
 ): { remove(): void } {
   if (!native) return { remove() {} };
   return native.addListener(event, cb);
+}
+
+/** True when Android battery optimisation will not delay/kill alarms (always true off-Android). */
+export async function isIgnoringBatteryOptimizations(): Promise<boolean> {
+  return native ? native.isIgnoringBatteryOptimizations() : true;
+}
+export function openBatterySettings(): void {
+  native?.openBatterySettings();
+}
+/** Schedules a real full-screen alarm `inSeconds` from now — for checking the setup. */
+export async function testAlarm(inSeconds = 60): Promise<void> {
+  await native?.testAlarm(inSeconds);
+}
+/** Earliest pending alarm (class or test), or null. */
+export async function nextAlarm(): Promise<NextAlarm | null> {
+  return native ? native.nextAlarm() : null;
+}
+/** Last uncaught native crash (stack text), cleared once read. */
+export async function consumeNativeCrash(): Promise<string | null> {
+  return native ? native.consumeNativeCrash() : null;
 }
