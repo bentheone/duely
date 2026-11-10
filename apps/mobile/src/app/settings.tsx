@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { WEEKDAY_LONG, formatHHMM, parseHHMM, zonedTime, type UserSettings } from '@duely/shared';
 import { FieldRow, Gap, OptionList, Screen, Sheet, SmallButton, T } from '@/components/ui';
 import { pickTime } from '@/components/pickers';
-import { PermissionRows } from '@/features/Permissions';
+import { AlarmCheck, PermissionRows } from '@/features/Permissions';
 import { remindersLabel } from '@/features/fieldOptions';
 import { RemindersSheet } from '@/features/RemindersSheet';
 import { signOut } from '@/lib/auth';
@@ -118,6 +118,7 @@ export default function Settings() {
         {toggle('Ring on silent', s.alarm.ringOnSilent, (v) => patch({ alarm: { ...s.alarm, ringOnSilent: v } }))}
         <Gap h={8} />
         <PermissionRows />
+        <AlarmCheck />
       </Group>
 
       <Group title="Reminders">

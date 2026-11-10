@@ -4,6 +4,8 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Crypto from 'expo-crypto';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
+import type { ErrorBoundaryProps } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useFonts, SpaceGrotesk_600SemiBold } from '@expo-google-fonts/space-grotesk';
@@ -17,7 +19,11 @@ import { startSyncTriggers } from '@/lib/sync/engine';
 import { startDerived } from '@/lib/derived';
 import { initNotifications, listenToNotificationResponses } from '@/lib/notifications';
 import { DuelyAlarm } from '@/lib/alarms';
+import { installCrashLogging, safely } from '@/lib/crash';
+import { ErrorScreen } from '@/components/ErrorScreen';
+import { CrashNotice } from '@/components/CrashNotice';
 
+installCrashLogging();
 void SplashScreen.preventAutoHideAsync();
 setUuidRandomSource((bytes) => Crypto.getRandomValues(bytes));
 
@@ -29,13 +35,19 @@ function Inner() {
 
   useEffect(() => {
     if (!signedIn) return;
-    void initNotifications();
-    const stops = [startSyncTriggers(), startDerived(), listenToNotificationResponses()];
-    const alarmSub = DuelyAlarm.addListener('alarmAction', () => undefined);
-    void DuelyAlarm.consumePendingActions();
+    safely('initNotifications', initNotifications);
+    const stops: (() => void)[] = [];
+    safely('startSyncTriggers', () => stops.push(startSyncTriggers()));
+    safely('startDerived', () => stops.push(startDerived()));
+    safely('notificationResponses', () => stops.push(listenToNotificationResponses()));
+    let alarmSub: { remove(): void } | null = null;
+    safely('alarmListener', () => {
+      alarmSub = DuelyAlarm.addListener('alarmAction', () => undefined);
+    });
+    safely('consumePendingActions', () => DuelyAlarm.consumePendingActions());
     return () => {
       stops.forEach((s) => s());
-      alarmSub.remove();
+      alarmSub?.remove();
     };
   }, [signedIn]);
 
@@ -46,8 +58,14 @@ function Inner() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="quick-add" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
       </Stack>
+      <CrashNotice />
     </>
   );
+}
+
+/** Shows the error instead of closing the app (preview builds too) so it can be screenshotted. */
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  return <ErrorScreen error={error} retry={retry} where="root" />;
 }
 
 export default function RootLayout() {
@@ -72,11 +90,13 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <QueryClientProvider client={queryClient}>
-          <ThemeProvider preference={theme}>
-            <Inner />
-          </ThemeProvider>
-        </QueryClientProvider>
+        <KeyboardProvider statusBarTranslucent navigationBarTranslucent>
+          <QueryClientProvider client={queryClient}>
+            <ThemeProvider preference={theme}>
+              <Inner />
+            </ThemeProvider>
+          </QueryClientProvider>
+        </KeyboardProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

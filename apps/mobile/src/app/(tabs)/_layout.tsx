@@ -1,7 +1,8 @@
 import React from 'react';
 import { Pressable, View } from 'react-native';
-import { Tabs } from 'expo-router/tabs';
-import { Redirect, router } from 'expo-router';
+import { Tabs, type BottomTabBarProps } from 'expo-router/tabs';
+import { Redirect, router, type ErrorBoundaryProps } from 'expo-router';
+import { ErrorScreen } from '@/components/ErrorScreen';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BookOpen, CalendarDays, GraduationCap, House, Plus } from 'lucide-react-native';
 import { useTheme } from '@/lib/theme';
@@ -14,13 +15,8 @@ const ICONS: Record<string, { Icon: typeof House; label: string }> = {
   exams: { Icon: GraduationCap, label: 'Exams' },
 };
 
-interface BarProps {
-  state: { index: number; routes: { key: string; name: string }[] };
-  navigation: { navigate: (name: string) => void };
-}
-
 /** Icon-only bottom bar: Today · Assignments · (+) · Calendar · Exams (§11.3). */
-function TabBar({ state, navigation }: BarProps) {
+function TabBar({ state, navigateToTab }: BottomTabBarProps) {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
   const order = ['today', 'assignments', '+', 'calendar', 'exams'];
@@ -60,6 +56,7 @@ function TabBar({ state, navigation }: BarProps) {
           );
         }
         const idx = state.routes.findIndex((r) => r.name === name);
+        const route = state.routes[idx];
         const focused = state.index === idx;
         const { Icon, label } = ICONS[name]!;
         return (
@@ -68,7 +65,7 @@ function TabBar({ state, navigation }: BarProps) {
             accessibilityRole="tab"
             accessibilityLabel={label}
             accessibilityState={{ selected: focused }}
-            onPress={() => navigation.navigate(name)}
+            onPress={() => route && !focused && navigateToTab(route.key)}
             style={{ width: 52, height: 52, alignItems: 'center', justifyContent: 'center' }}
           >
             <Icon size={24} color={focused ? c.text : c.faintIcon} strokeWidth={2} />
@@ -79,11 +76,15 @@ function TabBar({ state, navigation }: BarProps) {
   );
 }
 
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  return <ErrorScreen error={error} retry={retry} where="tabs" />;
+}
+
 export default function TabsLayout() {
   const signedIn = useApp((s) => s.signedIn);
   if (!signedIn) return <Redirect href="/onboarding" />;
   return (
-    <Tabs screenOptions={{ headerShown: false }} tabBar={(p) => <TabBar {...(p as unknown as BarProps)} />}>
+    <Tabs screenOptions={{ headerShown: false }} tabBar={(p) => <TabBar {...p} />}>
       <Tabs.Screen name="today" />
       <Tabs.Screen name="assignments" />
       <Tabs.Screen name="calendar" />

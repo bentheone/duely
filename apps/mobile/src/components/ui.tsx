@@ -17,6 +17,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { KeyboardAvoidingView, KeyboardAwareScrollView, KeyboardStickyView } from 'react-native-keyboard-controller';
 import { Check, ChevronLeft } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { FONTS, SPACE, useTheme } from '@/lib/theme';
@@ -84,22 +85,28 @@ export function Screen({
     ) : null;
   const top = header ? 12 : padTop ? insets.top + SPACE.screenTop - 16 : insets.top + 12;
   const content = (
-    <View style={{ paddingHorizontal: SPACE.screenX, paddingTop: top, paddingBottom: 120 }}>{children}</View>
+    <View style={scroll ? { paddingHorizontal: SPACE.screenX, paddingTop: top, paddingBottom: 120 } : { flex: 1, paddingHorizontal: SPACE.screenX, paddingTop: top, paddingBottom: 24 }}>{children}</View>
   );
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       {header}
       {scroll ? (
-        <ScrollView
+        <KeyboardAwareScrollView
+          bottomOffset={footer ? 120 : 32}
           keyboardShouldPersistTaps="handled"
           refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.muted} colors={[c.text]} progressBackgroundColor={c.surface} /> : undefined}
         >
           {content}
-        </ScrollView>
+        </KeyboardAwareScrollView>
       ) : (
         <View style={{ flex: 1 }}>{content}</View>
       )}
-      {footer ? <View style={[styles.footer, { paddingBottom: insets.bottom + 16, backgroundColor: c.bg }]}>{footer}</View> : null}
+      {footer ? (
+        // Rides on top of the keyboard so Continue / Save stay reachable while typing.
+        <KeyboardStickyView offset={{ opened: insets.bottom }}>
+          <View style={[styles.footer, { paddingBottom: insets.bottom + 16, backgroundColor: c.bg }]}>{footer}</View>
+        </KeyboardStickyView>
+      ) : null}
     </View>
   );
 }
@@ -391,6 +398,7 @@ export function Sheet({ visible, onClose, title, children }: { visible: boolean;
   const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
+      <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
       <Pressable accessibilityLabel="Close" style={{ flex: 1, backgroundColor: c.overlay }} onPress={onClose} />
       <View style={{ backgroundColor: c.bg, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: SPACE.screenX, paddingTop: 12, paddingBottom: insets.bottom + 24, maxHeight: '85%' }}>
         <View style={{ alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: c.border, marginBottom: 16 }} />
@@ -401,6 +409,7 @@ export function Sheet({ visible, onClose, title, children }: { visible: boolean;
         ) : null}
         <ScrollView keyboardShouldPersistTaps="handled">{children}</ScrollView>
       </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

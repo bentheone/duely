@@ -9,7 +9,7 @@ const config: ExpoConfig = {
   slug: 'duely',
   version: '1.0.0',
   orientation: 'portrait',
-  icon: './assets/images/icon.png',
+  icon: './assets/brand/expo/icon.png',
   scheme: 'duely',
   userInterfaceStyle: 'automatic',
   backgroundColor: '#FFFFFF',
@@ -17,30 +17,47 @@ const config: ExpoConfig = {
     package: 'app.duely',
     adaptiveIcon: {
       backgroundColor: '#111317',
-      foregroundImage: './assets/images/android-icon-foreground.png',
-      backgroundImage: './assets/images/android-icon-background.png',
-      monochromeImage: './assets/images/android-icon-monochrome.png',
+      foregroundImage: './assets/brand/expo/adaptive-icon-foreground.png',
+      monochromeImage: './assets/brand/expo/adaptive-icon-monochrome.png',
     },
     predictiveBackGestureEnabled: false,
     permissions: [
       'android.permission.POST_NOTIFICATIONS',
       'android.permission.CAMERA',
       'android.permission.RECEIVE_BOOT_COMPLETED',
-      'android.permission.SCHEDULE_EXACT_ALARM',
     ],
   },
   plugins: [
     'expo-router',
-    ['expo-splash-screen', { backgroundColor: '#FFFFFF', image: './assets/images/splash-icon.png', imageWidth: 76, dark: { backgroundColor: '#0E0F12' } }],
+    [
+      'expo-splash-screen',
+      {
+        backgroundColor: '#FFFFFF',
+        image: './assets/brand/expo/splash-icon.png',
+        imageWidth: 160,
+        dark: { backgroundColor: '#0E0F12', image: './assets/brand/expo/splash-icon-dark.png' },
+      },
+    ],
     'expo-sqlite',
     'expo-secure-store',
     'expo-localization',
     'expo-web-browser',
     '@react-native-google-signin/google-signin',
-    ['expo-notifications', { color: '#111317' }],
+    ['expo-notifications', { color: '#EA580C', icon: './assets/brand/expo/notification-icon.png' }],
     ['react-native-document-scanner-plugin', { cameraPermission: 'Duely uses the camera to scan handouts into PDFs.' }],
-    ['expo-build-properties', { android: { minSdkVersion: 26 } }],
-    ['duely-alarm', { useExactAlarm: false }],
+    [
+      'expo-build-properties',
+      {
+        android: {
+          minSdkVersion: 26,
+          // Phones only: arm64 covers every current Android phone; x86/armv7 tripled the APK (~120 MB).
+          buildArchs: ['arm64-v8a'],
+          enableMinifyInReleaseBuilds: true,
+          enableShrinkResourcesInReleaseBuilds: true,
+        },
+      },
+    ],
+    ['duely-alarm', { useExactAlarm: true }],
     [
       'react-native-android-widget',
       {
