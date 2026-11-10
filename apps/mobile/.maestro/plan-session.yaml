@@ -1,0 +1,14 @@
+# Plan a session: suggestions appear as dashed slots; Add all confirms them (→ "Duely" Google calendar on sync).
+appId: app.duely
+---
+- launchApp
+- tapOn: "Assignments"
+- tapOn: "Lab on cursors"
+- tapOn: "Plan a session"
+- extendedWaitUntil:
+    visible: ".*free slot.*"
+    timeout: 20000
+- tapOn: "Add all"
+- assertVisible: "0 free slots.*"
+- back
+- assertVisible: ".*–.*"

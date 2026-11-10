@@ -1,0 +1,48 @@
+# Onboarding: sign in → timetable → courses → storage → permissions → Today (§15)
+# Needs a test Google account added as an OAuth test user. Run: maestro test .maestro/onboarding.yaml
+appId: app.duely
+---
+- clearState
+- launchApp
+- assertVisible: "Duely"
+- tapOn: "Sign in with Google"
+- runFlow:
+    when:
+      visible: "Choose an account"
+    commands:
+      - tapOn:
+          index: 0
+          text: ".*@.*"
+- extendedWaitUntil:
+    visible: "Your timetable"
+    timeout: 30000
+- tapOn:
+    index: 0
+    id: ".*"
+    text: ".*Timetable.*|.*AUCA.*"
+    optional: true
+- tapOn: "Next"
+- assertVisible: "Busy times"
+- tapOn: "Save"
+- extendedWaitUntil:
+    visible: "Your courses"
+    timeout: 30000
+- runFlow:
+    when:
+      visible: "Use Fall 2026 courses"
+    commands:
+      - tapOn: "Use Fall 2026 courses"
+- tapOn: "Continue"
+- runFlow:
+    when:
+      visible: "Which course is this?"
+    commands:
+      - tapOn: "Done"
+- extendedWaitUntil:
+    visible: "Files"
+    timeout: 20000
+- tapOn: "Later"
+- assertVisible: "Alarms"
+- tapOn: "Done"
+- assertVisible:
+    text: "(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)"

@@ -1,0 +1,17 @@
+# Finishing a course hides it from filters (chips) and lists.
+appId: app.duely
+---
+- launchApp
+- tapOn: "Courses and settings"
+- assertVisible: "Health"
+- swipe:
+    from:
+      text: "Health"
+    direction: LEFT
+- tapOn: "Finish Health"
+- assertNotVisible: "Health"
+- assertVisible: "Finished · .*"
+- back
+- tapOn: "Assignments"
+- assertNotVisible:
+    text: "Health"

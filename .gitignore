@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.expo/
+android/
+ios/
+*.log
+.env
+.env.*
+!.env.example
+.vercel/
+coverage/
+*.tsbuildinfo

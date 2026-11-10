@@ -1,0 +1,24 @@
+# Quick add offline: the §14 acceptance sentence creates a group PL/SQL assignment.
+appId: app.duely
+---
+- launchApp
+- setAirplaneMode: enabled
+- tapOn: "Quick add"
+- tapOn:
+    id: "quick-add-input"
+- inputText: "PL/SQL lab on cursors fri 5pm group"
+- assertVisible:
+    id: "row-course"
+    text: ".*PL/SQL.*"
+- assertVisible:
+    id: "row-kind"
+    text: ".*Group.*"
+- assertVisible:
+    id: "row-due"
+    text: ".*17:00.*|.*Fri.*"
+- tapOn: "Save"
+- tapOn: "Assignments"
+- assertVisible: "Lab on cursors"
+- tapOn: "Lab on cursors"
+- assertVisible: "PL/SQL · Group"
+- setAirplaneMode: disabled
