@@ -79,6 +79,15 @@ async function pull(): Promise<boolean> {
   return changed;
 }
 
+let profileFresh = false;
+/** Once per app launch: re-read /me so server-computed fields (e.g. isAdmin) reach older sign-ins. */
+async function refreshProfile(): Promise<void> {
+  if (profileFresh) return;
+  const me = await api<{ user: User; google: { connected: boolean; scopes: string[] } }>('/me');
+  useApp.getState().setUser(me.user, me.google);
+  profileFresh = true;
+}
+
 async function pushSettings(): Promise<void> {
   if (getMeta('settingsDirty') !== '1') return;
   const u = useApp.getState().user;
@@ -117,6 +126,7 @@ export function syncNow(opts: { forceGoogle?: boolean } = {}): Promise<void> {
       await push();
       await pull();
       await pushSettings();
+      await refreshProfile();
       await googleSync(!!opts.forceGoogle);
       const now = Date.now();
       setMeta('lastSyncedAt', String(now));

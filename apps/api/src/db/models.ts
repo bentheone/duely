@@ -185,6 +185,62 @@ export const CounterModel = model<CounterDoc>(
   ),
 );
 
+// ---- Access requests & feedback (not synced; admin-only reads) ----
+
+export interface AccessRequestDoc {
+  _id: string;
+  email: string;
+  name?: string | null;
+  status: 'pending' | 'added' | 'notified' | 'dismissed';
+  requests: number;
+  createdAt: number;
+  updatedAt: number;
+  notifiedAt?: number | null;
+}
+export const AccessRequestModel = model<AccessRequestDoc>(
+  'AccessRequest',
+  new Schema<AccessRequestDoc>(
+    {
+      _id: { type: String, required: true },
+      email: { type: String, required: true, unique: true },
+      name: { type: String, default: null },
+      status: { type: String, required: true, default: 'pending', index: true },
+      requests: { type: Number, default: 1 },
+      createdAt: Number,
+      updatedAt: Number,
+      notifiedAt: { type: Number, default: null },
+    },
+    { versionKey: false },
+  ),
+);
+
+export interface FeedbackDoc {
+  _id: string;
+  userId: string;
+  kind: 'bug' | 'idea' | 'other';
+  message: string;
+  appVersion?: string | null;
+  device?: string | null;
+  read: boolean;
+  createdAt: number;
+}
+export const FeedbackModel = model<FeedbackDoc>(
+  'Feedback',
+  new Schema<FeedbackDoc>(
+    {
+      _id: { type: String, required: true },
+      userId: { type: String, required: true, index: true },
+      kind: { type: String, required: true },
+      message: { type: String, required: true },
+      appVersion: { type: String, default: null },
+      device: { type: String, default: null },
+      read: { type: Boolean, default: false },
+      createdAt: { type: Number, index: true },
+    },
+    { versionKey: false },
+  ),
+);
+
 // ---- Synced collections ----
 
 export const SemesterModel = model(

@@ -16,7 +16,7 @@ import {
   type FileAttachment,
   type StorageInfo,
 } from '@duely/shared';
-import { api } from './api';
+import { api, ApiError } from './api';
 import { getRawDb } from './db/client';
 import { snapshot } from './db/queries';
 import { getMeta, getMetaJson, getRecord, newId, save, setMeta, setMetaJson } from './db/repo';
@@ -248,17 +248,44 @@ export async function processUploadQueue(): Promise<void> {
 
 // ---------- download / offline (§9.2) ----------
 
+/** A user-facing reason a file can't be opened right now. */
+export class FileUnavailableError extends Error {}
+
 export async function ensureLocal(f: FileAttachment): Promise<string> {
   const cached = cachedUri(f.id);
   if (cached && (await FS.getInfoAsync(cached)).exists) return cached;
-  const { url, headers } = await api<{ url: string; headers: Record<string, string> }>(`/files/${f.id}/url`);
+  if (!f.remoteId) {
+    throw new FileUnavailableError('It hasn’t finished uploading from the phone that added it. Open Duely there while online.');
+  }
+  if (!useApp.getState().online) throw new FileUnavailableError('You’re offline and this file isn’t saved on this phone yet.');
+  let target: { url: string; headers: Record<string, string>; fallbackUrl?: string | null };
+  try {
+    target = await api<{ url: string; headers: Record<string, string>; fallbackUrl?: string | null }>(`/files/${f.id}/url`);
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) {
+      throw new FileUnavailableError('The server doesn’t have this file yet. Pull to sync on the phone that added it.');
+    }
+    throw e;
+  }
   const dir = `${FILES_DIR}${f.id}/`;
   await FS.makeDirectoryAsync(dir, { intermediates: true });
   const dest = `${dir}${safeName(f.name)}`;
-  const r = await FS.downloadAsync(url, dest, { headers });
-  if (r.status >= 300) throw new Error(`Download failed (${r.status})`);
-  setCache(f.id, dest);
-  return dest;
+  let status = 0;
+  for (const url of [target.url, target.fallbackUrl].filter((u): u is string => !!u)) {
+    const r = await FS.downloadAsync(url, dest, { headers: url === target.url ? target.headers : {} });
+    status = r.status;
+    if (r.status < 300) {
+      setCache(f.id, dest);
+      return dest;
+    }
+  }
+  // downloadAsync writes the error body to dest — don't leave it behind as a fake file.
+  await FS.deleteAsync(dest, { idempotent: true });
+  throw new FileUnavailableError(
+    status === 401 || status === 403
+      ? `Storage refused the download (${status}). In Cloudinary → Settings → Security, enable “Allow delivery of PDF and ZIP files”.`
+      : `Download failed (${status || 'network'}). Try again.`,
+  );
 }
 
 /** Keep offline: default on for assignments due within 14 days. */

@@ -17,6 +17,8 @@ import { PlannerController } from './planner/planner.controller';
 import { StorageController } from './storage/storage.controller';
 import { ExportController } from './export/export.controller';
 import { connectMongo } from './db/connection';
+import { AccessRequestController, AdminController, FeedbackController } from './access/access.controller';
+import { MAILER, SmtpMailer } from './mail/mailer';
 import { config } from './config';
 
 @Controller('health')
@@ -41,6 +43,9 @@ export const DB_READY = Symbol('DB_READY');
     PlannerController,
     StorageController,
     ExportController,
+    AccessRequestController,
+    FeedbackController,
+    AdminController,
   ],
   providers: [
     { provide: DB_READY, useFactory: () => connectMongo(config().mongoUri) },
@@ -49,6 +54,7 @@ export const DB_READY = Symbol('DB_READY');
     GoogleSyncService,
     { provide: GOOGLE_IDENTITY, useClass: RealGoogleIdentity },
     { provide: GOOGLE_API_FACTORY, useClass: RealGoogleApiFactory },
+    { provide: MAILER, useClass: SmtpMailer },
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtGuard },
     { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },

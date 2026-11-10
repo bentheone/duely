@@ -1,7 +1,12 @@
+import { config } from '../config';
 import { Body, Controller, Get, NotFoundException, Patch } from '@nestjs/common';
 import { SettingsPatchSchema, SettingsSchema, type SettingsPatch, type User } from '@duely/shared';
 import { CurrentUser, ZodPipe, type AuthedUser } from '../common/http';
 import { IntegrationAccountModel, UserModel, type UserDoc } from '../db/models';
+
+export function isAdminEmail(email: string): boolean {
+  return config().adminEmails.includes(email.toLowerCase());
+}
 
 export function toPublicUser(u: UserDoc): User {
   return {
@@ -13,6 +18,7 @@ export function toPublicUser(u: UserDoc): User {
     timezone: u.timezone,
     settings: u.settings,
     activeSemesterId: u.activeSemesterId ?? null,
+    isAdmin: isAdminEmail(u.email),
   };
 }
 

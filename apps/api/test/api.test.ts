@@ -1,6 +1,9 @@
+import { BadGatewayException, ForbiddenException } from '@nestjs/common';
+import { googleCodeError } from '../src/auth/google-identity';
 import { uuidv7, zonedTime } from '@duely/shared';
 import { IntegrationAccountModel, UserModel } from '../src/db/models';
 import { decrypt, encrypt } from '../src/common/crypto';
+import { cloudinarySignature } from '../src/storage/storage.controller';
 import { base, setup, teardown, type TestCtx } from './helpers';
 
 let ctx: TestCtx;
@@ -327,6 +330,33 @@ describe('storage', () => {
     await ctx.http().post('/files/sign').set(auth).send({ attachmentId: 'a', resourceType: 'raw', mime: 'application/pdf', size: 26 * 1024 * 1024 }).expect(400);
   });
 
+  test('file download URL: PDFs via the signed API download (works with PDF delivery blocked), images via secure_url', async () => {
+    const t = await ctx.signIn('owner', 'owner@example.com');
+    const auth = { Authorization: `Bearer ${t.accessToken}` };
+    const asgId = uuidv7();
+    const pdf = { ...base(uuidv7()), ownerType: 'assignment', ownerId: asgId, name: 'Lab 1.pdf', mime: 'application/pdf', size: 1000, provider: 'cloudinary', remoteId: 'duely/Fall 2026/PL-SQL/att9.pdf', remoteUrl: 'https://res.cloudinary.com/ownercloud/raw/upload/v17/duely/Fall%202026/PL-SQL/att9.pdf', checksum: 'x' };
+    const img = { ...base(uuidv7()), ownerType: 'assignment', ownerId: asgId, name: 'board.jpg', mime: 'image/jpeg', size: 10, provider: 'cloudinary', remoteId: 'duely/att10', remoteUrl: 'https://res.cloudinary.com/ownercloud/image/upload/v17/duely/att10.jpg', checksum: 'y' };
+    const pending = { ...base(uuidv7()), ownerType: 'assignment', ownerId: asgId, name: 'notyet.pdf', mime: 'application/pdf', size: 10, provider: 'cloudinary', remoteId: null, checksum: 'z' };
+    await ctx.http().post('/sync/push').set(auth).send({ changes: [pdf, img, pending].map((record) => ({ table: 'files', record })) }).expect(200);
+
+    const r = await ctx.http().get(`/files/${pdf.id}/url`).set(auth).expect(200);
+    const u = new URL(r.body.url);
+    expect(u.origin + u.pathname).toBe('https://api.cloudinary.com/v1_1/ownercloud/raw/download');
+    expect(u.searchParams.get('public_id')).toBe('duely/Fall 2026/PL-SQL/att9.pdf');
+    expect(u.searchParams.get('api_key')).toBe('ownerkey');
+    const ts = u.searchParams.get('timestamp')!;
+    const expected = cloudinarySignature({ public_id: 'duely/Fall 2026/PL-SQL/att9.pdf', type: 'upload', timestamp: ts, expires_at: u.searchParams.get('expires_at')! }, 'ownersecret');
+    expect(u.searchParams.get('signature')).toBe(expected);
+    expect(r.body.fallbackUrl).toBe(pdf.remoteUrl);
+    expect(JSON.stringify(r.body)).not.toContain('ownersecret');
+
+    const ri = await ctx.http().get(`/files/${img.id}/url`).set(auth).expect(200);
+    expect(ri.body.url).toBe(img.remoteUrl);
+    await ctx.http().get(`/files/${pending.id}/url`).set(auth).expect(404);
+    const other = await ctx.signIn('stranger2');
+    await ctx.http().get(`/files/${pdf.id}/url`).set('Authorization', `Bearer ${other.accessToken}`).expect(404);
+  });
+
   test('non-owner without config cannot sign; owner-only option is forbidden', async () => {
     const t = await ctx.signIn('stranger');
     const auth = { Authorization: `Bearer ${t.accessToken}` };
@@ -358,5 +388,76 @@ describe('export (v2)', () => {
     const r2 = await ctx.http().get('/export/reminders?since=3').set(auth).expect(200);
     expect(r2.body.ackedRev).toBe(3);
     expect(r2.body.items).toHaveLength(0);
+  });
+});
+
+describe('access requests, feedback, admin', () => {
+  test('anyone can request access; repeats are merged; admins are emailed once', async () => {
+    ctx.mail.sent.length = 0;
+    await ctx.http().post('/access-requests').send({ email: ' New.Person@Gmail.com ', name: 'New Person' }).expect(202);
+    await ctx.http().post('/access-requests').send({ email: 'new.person@gmail.com' }).expect(202);
+    await ctx.http().post('/access-requests').send({ email: 'not-an-email' }).expect(400);
+    expect(ctx.mail.sent.map((m) => m.to)).toEqual(['owner@example.com']);
+    expect(ctx.mail.sent[0]!.subject).toContain('new.person@gmail.com');
+  });
+
+  test('admin endpoints are owner-only; owner sees isAdmin', async () => {
+    const bob = await ctx.signIn('bob-admin-test', 'bob@example.com');
+    await ctx.http().get('/admin/access-requests').set('Authorization', `Bearer ${bob.accessToken}`).expect(403);
+    const me = await ctx.http().get('/me').set('Authorization', `Bearer ${bob.accessToken}`).expect(200);
+    expect(me.body.user.isAdmin).toBe(false);
+    const owner = await ctx.signIn('owner-sub', 'owner@example.com');
+    const meO = await ctx.http().get('/me').set('Authorization', `Bearer ${owner.accessToken}`).expect(200);
+    expect(meO.body.user.isAdmin).toBe(true);
+  });
+
+  test('admin lists requests, notifies by email, and handles missing SMTP', async () => {
+    const owner = await ctx.signIn('owner-sub', 'owner@example.com');
+    const auth = { Authorization: `Bearer ${owner.accessToken}` };
+    const list = await ctx.http().get('/admin/access-requests').set(auth).expect(200);
+    const req = list.body.find((r: { email: string }) => r.email === 'new.person@gmail.com');
+    expect(req).toMatchObject({ status: 'pending', requests: 2, name: 'New Person' });
+
+    ctx.mail.sent.length = 0;
+    const n = await ctx.http().post(`/admin/access-requests/${req.id}/notify`).set(auth).expect(200);
+    expect(n.body).toMatchObject({ status: 'notified' });
+    expect(n.body.notifiedAt).toBeGreaterThan(0);
+    expect(ctx.mail.sent).toHaveLength(1);
+    expect(ctx.mail.sent[0]).toMatchObject({ to: 'new.person@gmail.com', subject: "You're in — sign in to Duely" });
+    expect(ctx.mail.sent[0]!.html).toContain('Hi New');
+
+    ctx.mail.configured = false;
+    await ctx.http().post(`/admin/access-requests/${req.id}/notify`).set(auth).expect(503);
+    ctx.mail.configured = true;
+
+    await ctx.http().patch(`/admin/access-requests/${req.id}`).set(auth).send({ status: 'dismissed' }).expect(200);
+    const s = await ctx.http().get('/admin/summary').set(auth).expect(200);
+    expect(s.body).toMatchObject({ emailConfigured: true });
+  });
+
+  test('signed-in users send feedback; admin reads and marks it read', async () => {
+    const alice = await ctx.signIn('alice-fb', 'alice-fb@example.com');
+    await ctx.http().post('/feedback').set('Authorization', `Bearer ${alice.accessToken}`).send({ kind: 'bug', message: 'x' }).expect(400);
+    await ctx.http()
+      .post('/feedback')
+      .set('Authorization', `Bearer ${alice.accessToken}`)
+      .send({ kind: 'bug', message: 'Calendar tab closes the app', appVersion: '1.0.0', device: 'android 15' })
+      .expect(201);
+    await ctx.http().post('/feedback').send({ kind: 'idea', message: 'no token' }).expect(401);
+
+    const owner = await ctx.signIn('owner-sub', 'owner@example.com');
+    const auth = { Authorization: `Bearer ${owner.accessToken}` };
+    const fb = await ctx.http().get('/admin/feedback').set(auth).expect(200);
+    expect(fb.body[0]).toMatchObject({ kind: 'bug', message: 'Calendar tab closes the app', email: 'alice-fb@example.com', read: false });
+    await ctx.http().patch(`/admin/feedback/${fb.body[0].id}`).set(auth).send({ read: true }).expect(204);
+    const s = await ctx.http().get('/admin/summary').set(auth).expect(200);
+    expect(s.body.unreadFeedback).toBe(0);
+  });
+
+  test('Google refusing the code (not a test user) becomes code google_access_denied', () => {
+    const err = googleCodeError({ response: { data: { error: 'access_denied' } } }) as ForbiddenException;
+    expect(err.getStatus()).toBe(403);
+    expect(err.getResponse()).toMatchObject({ code: 'google_access_denied' });
+    expect((googleCodeError({ response: { data: { error: 'invalid_grant' } } }) as BadGatewayException).getStatus()).toBe(502);
   });
 });

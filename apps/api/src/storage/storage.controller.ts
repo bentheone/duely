@@ -10,7 +10,6 @@ import {
   Post,
   Put,
 } from '@nestjs/common';
-import { createHash } from 'node:crypto';
 import type { z } from 'zod';
 import {
   ALLOWED_MIME,
@@ -55,9 +54,30 @@ export function cloudinarySignature(params: Record<string, string | number>, sec
   return sha1(s + secret);
 }
 
-/** Signed delivery URL component (s--XXXXXXXX--). */
-export function cloudinaryDeliverySig(toSign: string, secret: string): string {
-  return createHash('sha1').update(toSign + secret).digest('base64url').slice(0, 8);
+/**
+ * Download URLs for a Cloudinary asset.
+ * - Documents (raw): the signed, expiring API download endpoint. Unlike CDN delivery it works even when
+ *   the account blocks public PDF/ZIP delivery (the default for new accounts), and needs no URL-encoding
+ *   tricks for folders with spaces.
+ * - Images: the stored secure_url (exact version + encoding), else a properly encoded CDN URL.
+ * `fallbackUrl` lets the app try the other route if the first answers 4xx.
+ */
+export function cloudinaryDownload(
+  c: { cloudName: string; apiKey: string; apiSecret: string },
+  publicId: string,
+  mime: string,
+  remoteUrl: string | null,
+  now = Date.now(),
+): { url: string; headers: Record<string, string>; fallbackUrl: string | null } {
+  const type = mime.startsWith('image/') ? 'image' : 'raw';
+  const encodedPath = publicId.split('/').map(encodeURIComponent).join('/');
+  const cdn = remoteUrl ?? `https://res.cloudinary.com/${c.cloudName}/${type}/upload/${encodedPath}`;
+  if (type === 'image') return { url: cdn, headers: {}, fallbackUrl: null };
+  const timestamp = Math.floor(now / 1000);
+  const params = { public_id: publicId, type: 'upload', timestamp, expires_at: timestamp + 3600 };
+  const signature = cloudinarySignature(params, c.apiSecret);
+  const qs = new URLSearchParams({ ...Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)])), api_key: c.apiKey, signature });
+  return { url: `https://api.cloudinary.com/v1_1/${c.cloudName}/raw/download?${qs.toString()}`, headers: {}, fallbackUrl: cdn };
 }
 
 export function validateFile(mime: string, size: number): void {
@@ -211,9 +231,6 @@ export class StorageController {
     }
     const c = await this.creds(u.userId);
     if (!c) throw new BadRequestException('Cloudinary is not configured');
-    const type = String(f.mime).startsWith('image/') ? 'image' : 'raw';
-    const publicId = String(f.remoteId);
-    const sig = cloudinaryDeliverySig(publicId, c.apiSecret);
-    return { url: `https://res.cloudinary.com/${c.cloudName}/${type}/upload/s--${sig}--/${publicId}`, headers: {} };
+    return cloudinaryDownload(c, String(f.remoteId), String(f.mime), (f.remoteUrl as string | null | undefined) ?? null);
   }
 }

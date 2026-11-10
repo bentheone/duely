@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 import { router } from 'expo-router';
 import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
-import { ChevronDown, ChevronRight, Plus, Settings as Gear } from 'lucide-react-native';
+import { ChevronDown, ChevronRight, MessageSquare, Plus, Settings as Gear, ShieldCheck } from 'lucide-react-native';
 import { WEEKDAY_SHORT, zonedParts } from '@duely/shared';
 import { Card, Dot, Gap, IconButton, Input, OptionList, PillButton, Screen, Sheet, SmallButton, T } from '@/components/ui';
 import { useActiveSemester, useClassSessions, useCourses, useSemesters } from '@/lib/db/queries';
@@ -19,6 +19,7 @@ export default function Courses() {
   const { active, finished } = useCourses();
   const classes = useClassSessions();
   const [semSheet, setSemSheet] = useState(false);
+  const isAdmin = useApp((st) => !!st.user?.isAdmin);
   const [newSem, setNewSem] = useState<string | null>(null);
 
   const daysByCourse = useMemo(() => {
@@ -40,9 +41,19 @@ export default function Courses() {
     <Screen
       back
       right={
-        <IconButton label="Settings" onPress={() => router.push('/settings')}>
-          <Gear size={20} color={c.text} />
-        </IconButton>
+        <>
+          {isAdmin ? (
+            <IconButton label="Admin" onPress={() => router.push('/admin')}>
+              <ShieldCheck size={20} color={c.text} />
+            </IconButton>
+          ) : null}
+          <IconButton label="Send feedback" onPress={() => router.push('/feedback')}>
+            <MessageSquare size={20} color={c.text} />
+          </IconButton>
+          <IconButton label="Settings" onPress={() => router.push('/settings')}>
+            <Gear size={20} color={c.text} />
+          </IconButton>
+        </>
       }
     >
       <Pressable accessibilityRole="button" accessibilityLabel="Switch semester" onPress={() => setSemSheet(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }}>

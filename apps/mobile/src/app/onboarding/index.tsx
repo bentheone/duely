@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import { useWindowDimensions, View } from 'react-native';
+import { Pressable, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
-import { statusCodes } from '@react-native-google-signin/google-signin';
 import { Gap, PillButton, Screen, T } from '@/components/ui';
 import { signInWithGoogle } from '@/lib/auth';
 import { syncNow } from '@/lib/sync/engine';
@@ -10,12 +9,17 @@ import { snapshot } from '@/lib/db/queries';
 import { useApp } from '@/lib/store';
 import { AnimatedLogo } from '@/components/AnimatedLogo';
 import { useTheme } from '@/lib/theme';
+import { RequestAccessSheet } from '@/features/RequestAccess';
+import { classifySignInError } from '@/features/signInErrors';
 
 /** One question per screen (§11.3 onboarding): Sign in with Google. */
 export default function Welcome() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [intro, setIntro] = useState(false);
+  // Shown after any failed/cancelled attempt: non-testers often just see Google's "Access blocked" page.
+  const [tried, setTried] = useState(false);
+  const [ask, setAsk] = useState<{ open: boolean; reason?: string | null }>({ open: false });
   const { scheme } = useTheme();
   const { width } = useWindowDimensions();
 
@@ -24,7 +28,10 @@ export default function Welcome() {
     setError(null);
     try {
       const auth = await signInWithGoogle();
-      if (!auth) return;
+      if (!auth) {
+        setTried(true);
+        return;
+      }
       await syncNow();
       const returning = auth.google.calendarsConfigured && snapshot().courses.length > 0;
       if (returning) {
@@ -34,8 +41,14 @@ export default function Welcome() {
         router.replace('/onboarding/calendars');
       }
     } catch (e) {
-      const code = (e as { code?: string }).code;
-      if (code !== statusCodes.SIGN_IN_CANCELLED) setError((e as Error).message || 'Sign-in failed. Check your connection.');
+      setTried(true);
+      const v = classifySignInError(e);
+      if (v.kind === 'cancelled') return;
+      if (v.kind === 'denied') {
+        setAsk({ open: true, reason: v.detail });
+        return;
+      }
+      setError(v.message);
     } finally {
       setBusy(false);
     }
@@ -73,6 +86,15 @@ export default function Welcome() {
           </>
         ) : null}
       </View>
+      {intro && (tried || error) ? (
+        <Pressable accessibilityRole="button" onPress={() => setAsk({ open: true })} hitSlop={8} style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'center' }}>
+          <T v="small" tone="muted">
+            Can’t sign in? <T v="small">Request access</T>
+          </T>
+        </Pressable>
+      ) : null}
+      <RequestAccessSheet visible={ask.open} reason={ask.reason} onClose={() => setAsk({ open: false })} />
     </Screen>
   );
 }
+

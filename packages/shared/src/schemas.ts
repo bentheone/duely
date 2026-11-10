@@ -57,6 +57,8 @@ export const UserSchema = z.object({
   timezone: z.string(),
   settings: SettingsSchema,
   activeSemesterId: z.string().nullable().optional(),
+  /** Server-computed (ADMIN_EMAILS / OWNER_EMAIL); never client-writable. */
+  isAdmin: z.boolean().optional(),
 });
 
 export const SemesterSchema = z.object({
@@ -261,3 +263,21 @@ export const AuthGoogleSchema = z.object({
   timezone: z.string().optional(),
 });
 export const RefreshSchema = z.object({ refreshToken: z.string().min(10) });
+
+// ---- Access requests (people Google blocks while the OAuth app is in Testing) ----
+export const AccessRequestBodySchema = z.object({
+  email: z.string().trim().toLowerCase().email().max(254),
+  name: z.string().trim().max(80).optional(),
+});
+export const ACCESS_REQUEST_STATUSES = ['pending', 'added', 'notified', 'dismissed'] as const;
+export const AccessRequestPatchSchema = z.object({ status: z.enum(ACCESS_REQUEST_STATUSES) });
+
+// ---- Feedback ----
+export const FEEDBACK_KINDS = ['bug', 'idea', 'other'] as const;
+export const FeedbackBodySchema = z.object({
+  kind: z.enum(FEEDBACK_KINDS),
+  message: z.string().trim().min(3).max(4000),
+  appVersion: z.string().max(40).optional(),
+  device: z.string().max(120).optional(),
+});
+export const FeedbackPatchSchema = z.object({ read: z.boolean() });

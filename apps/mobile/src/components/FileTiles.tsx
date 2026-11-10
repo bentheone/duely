@@ -4,7 +4,7 @@ import { Camera, Paperclip } from 'lucide-react-native';
 import type { FileAttachment } from '@duely/shared';
 import { IconButton, T } from './ui';
 import { useFiles } from '@/lib/db/queries';
-import { openWith, pickFiles, scanToPdf } from '@/lib/files';
+import { FileUnavailableError, openWith, pickFiles, scanToPdf } from '@/lib/files';
 import { remove } from '@/lib/db/repo';
 import { useApp } from '@/lib/store';
 import { useTheme } from '@/lib/theme';
@@ -35,7 +35,7 @@ export function FileTiles({ ownerType, ownerId }: { ownerType: 'assignment' | 'e
     try {
       await openWith(f);
     } catch (e) {
-      Alert.alert('Can’t open yet', `${(e as Error).message}. It will be available once synced.`);
+      Alert.alert('Can’t open file', e instanceof FileUnavailableError ? e.message : `${(e as Error).message || 'Something went wrong'}. Try again.`);
     }
   };
 

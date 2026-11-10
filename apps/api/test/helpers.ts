@@ -10,6 +10,7 @@ import { GOOGLE_API_FACTORY, type GEvent, type GoogleApi, type GTask } from '../
 import { AppModule } from '../src/app.module';
 import { GOOGLE_IDENTITY } from '../src/auth/google-identity';
 import { configureApp } from '../src/serverless';
+import { MAILER, type MailMessage, type Mailer } from '../src/mail/mailer';
 
 export interface FakeGoogle extends GoogleApi {
   calendars: { id: string; summary: string; primary: boolean }[];
@@ -106,6 +107,12 @@ export interface TestCtx {
   google: FakeGoogle;
   http: () => ReturnType<typeof request>;
   signIn: (sub?: string, email?: string) => Promise<{ accessToken: string; refreshToken: string; userId: string }>;
+  mail: FakeMailer;
+}
+
+export interface FakeMailer extends Mailer {
+  configured: boolean;
+  sent: MailMessage[];
 }
 
 export async function setup(): Promise<TestCtx> {
@@ -121,6 +128,13 @@ export async function setup(): Promise<TestCtx> {
   process.env.OWNER_CLOUDINARY_API_SECRET = 'ownersecret';
 
   const google = fakeGoogle();
+  const mail: FakeMailer = {
+    configured: true,
+    sent: [],
+    async send(m) {
+      mail.sent.push(m);
+    },
+  };
 
   const mod = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(GOOGLE_IDENTITY)
@@ -137,6 +151,8 @@ export async function setup(): Promise<TestCtx> {
     })
     .overrideProvider(GOOGLE_API_FACTORY)
     .useValue({ forAccount: () => google })
+    .overrideProvider(MAILER)
+    .useValue(mail)
     .compile();
   const app = configureApp(mod.createNestApplication({ logger: false }));
   await app.init();
@@ -148,7 +164,7 @@ export async function setup(): Promise<TestCtx> {
       .expect(200);
     return { accessToken: r.body.accessToken, refreshToken: r.body.refreshToken, userId: r.body.user.id };
   };
-  return { app, mongo, google, http, signIn };
+  return { app, mongo, google, http, signIn, mail };
 }
 
 export async function teardown(ctx: TestCtx): Promise<void> {

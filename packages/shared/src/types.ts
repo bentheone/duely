@@ -93,3 +93,31 @@ export interface StorageInfo {
   pdfDeliveryConfirmed: boolean;
   hasDriveScope: boolean;
 }
+
+export type AccessRequestStatus = (typeof import('./schemas').ACCESS_REQUEST_STATUSES)[number];
+export interface AccessRequest {
+  id: string;
+  email: string;
+  name: string | null;
+  status: AccessRequestStatus;
+  requests: number;
+  createdAt: number;
+  updatedAt: number;
+  notifiedAt: number | null;
+}
+
+export type FeedbackKind = (typeof import('./schemas').FEEDBACK_KINDS)[number];
+export interface FeedbackItem {
+  id: string;
+  kind: FeedbackKind;
+  message: string;
+  email: string;
+  name: string;
+  appVersion: string | null;
+  device: string | null;
+  read: boolean;
+  createdAt: number;
+}
+
+/** Error codes the API puts in `{ code }` so the app can react (not just show text). */
+export type ApiErrorCode = 'google_access_denied';

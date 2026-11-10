@@ -137,6 +137,11 @@ export default function Settings() {
         <FieldRow label="Open weekly check" value="›" onPress={() => router.push('/weekly-check')} />
       </Group>
 
+      <Group title="Help">
+        <FieldRow label="Send feedback" value="›" onPress={() => router.push('/feedback')} />
+        {user?.isAdmin ? <FieldRow label="Admin" value="›" onPress={() => router.push('/admin')} /> : null}
+      </Group>
+
       <Group title="Appearance">
         <FieldRow label="Theme" value={{ system: 'System', light: 'Light', dark: 'Dark' }[s.theme]} onPress={() => setSheet('theme')} />
       </Group>
