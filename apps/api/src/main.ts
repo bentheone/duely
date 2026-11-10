@@ -1,20 +1,27 @@
-import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
-import { createApp } from './serverless';
 
-// Minimal .env loader for local dev (Vercel injects env in production).
-const envPath = join(__dirname, '..', '.env');
-if (existsSync(envPath)) {
-  for (const line of readFileSync(envPath, 'utf8').split('\n')) {
-    const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/.exec(line);
-    if (m && !process.env[m[1]!]) process.env[m[1]!] = m[2]!.replace(/^["']|["']$/g, '');
-  }
+import 'reflect-metadata';
+import express from 'express';
+import { NestFactory } from '@nestjs/core';
+import { ExpressAdapter } from '@nestjs/platform-express';
+import { AppModule } from './app.module';
+import { configureApp } from './serverless';
+
+async function bootstrap() {
+  const server = express();
+  server.disable('x-powered-by');
+
+  const app = await NestFactory.create(
+    AppModule,
+    new ExpressAdapter(server),
+    {
+      logger: ['log', 'warn', 'error'],
+      bodyParser: true,
+    },
+  );
+
+  configureApp(app);
+
+  await app.listen(process.env.PORT ?? 3000);
 }
 
-async function main() {
-  const { server } = await createApp();
-  const port = Number(process.env.PORT ?? 3000);
-  server.listen(port, () => console.log(`Duely API on http://localhost:${port}`));
-}
-
-void main();
+void bootstrap();
