@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { DAY, isAssignmentOpen, startOfZonedDay } from '@duely/shared';
 import { Chip, Empty, Gap, PillButton, Screen, T } from '@/components/ui';
 import { AssignmentRow } from '@/components/rows';
+import { TitleRow } from '@/components/ProfileButton';
 import { useAssignments, useCourses } from '@/lib/db/queries';
 import { useApp, useTz } from '@/lib/store';
 import { syncNow } from '@/lib/sync/engine';
@@ -47,7 +48,9 @@ export default function Assignments() {
 
   return (
     <Screen onRefresh={() => void syncNow({ forceGoogle: true })} refreshing={syncing}>
-      <T v="display">Assignments</T>
+      <TitleRow>
+        <T v="display">Assignments</T>
+      </TitleRow>
       <Gap h={20} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} style={{ marginHorizontal: -28 }} contentInset={{ left: 28 }}>
         <View style={{ width: 20 }} />

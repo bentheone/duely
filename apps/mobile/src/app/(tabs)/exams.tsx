@@ -3,6 +3,7 @@ import { Pressable, View } from 'react-native';
 import { router } from 'expo-router';
 import { DAY, EXAM_TYPE_LABELS, formatHHMM, formatShortDate, startOfZonedDay } from '@duely/shared';
 import { CourseLabel, Empty, Gap, PillButton, Screen, T } from '@/components/ui';
+import { TitleRow } from '@/components/ProfileButton';
 import { useCourses, useExams } from '@/lib/db/queries';
 import { useApp, useTz } from '@/lib/store';
 import { syncNow } from '@/lib/sync/engine';
@@ -40,7 +41,9 @@ export default function Exams() {
 
   return (
     <Screen onRefresh={() => void syncNow({ forceGoogle: true })} refreshing={syncing}>
-      <T v="display">Exams</T>
+      <TitleRow>
+        <T v="display">Exams</T>
+      </TitleRow>
       <Gap h={24} />
       {upcoming.length === 0 ? <Empty title="No exams coming up" action={<PillButton title="Add exam" onPress={() => router.push('/quick-add')} />} /> : null}
       {upcoming.map((e) => row(e))}

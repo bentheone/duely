@@ -21,6 +21,7 @@ import {
 import { Gap, IconButton, PillButton, SmallButton, T } from '@/components/ui';
 import { Screen } from '@/components/ui';
 import { pickDateTime } from '@/components/pickers';
+import { TitleRow } from '@/components/ProfileButton';
 import { addManualSession, confirmSession } from '@/features/actions';
 import { useAssignments, useClassSessions, useCourses, useExams, useSessions } from '@/lib/db/queries';
 import { api } from '@/lib/api';
@@ -162,7 +163,13 @@ export default function Calendar() {
         ) : undefined
       }
     >
-      <T v="display">{MONTH_LONG[sel.month - 1]}</T>
+      {planning ? (
+        <T v="display">{MONTH_LONG[sel.month - 1]}</T>
+      ) : (
+        <TitleRow>
+          <T v="display">{MONTH_LONG[sel.month - 1]}</T>
+        </TitleRow>
+      )}
       {planning && (target || exam) ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
           <T tone="muted" numberOfLines={1} style={{ flex: 1 }}>

@@ -73,13 +73,16 @@ describe('bottom-nav tabs render', () => {
     await render(wrap(<Assignments />));
     expect(screen.getByText('Assignments')).toBeTruthy();
     expect(screen.getByText('Lab')).toBeTruthy();
+    expect(screen.getByLabelText('Courses and settings')).toBeTruthy();
   });
   test('Calendar', async () => {
     await render(wrap(<Calendar />));
     expect(screen.getAllByText(/PL\/SQL/).length).toBeGreaterThan(0);
+    expect(screen.getByLabelText('Courses and settings')).toBeTruthy();
   });
   test('Exams', async () => {
     await render(wrap(<Exams />));
     expect(screen.getByText('Midterm')).toBeTruthy();
+    expect(screen.getByLabelText('Courses and settings')).toBeTruthy();
   });
 });
