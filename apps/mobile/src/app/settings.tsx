@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Alert, Switch, View } from 'react-native';
 import { router } from 'expo-router';
+import { UpdateRow } from '@/components/UpdateRow';
 import { useQuery } from '@tanstack/react-query';
 import { WEEKDAY_LONG, formatHHMM, parseHHMM, zonedTime, type UserSettings } from '@duely/shared';
 import { FieldRow, Gap, OptionList, Screen, Sheet, SmallButton, T } from '@/components/ui';
@@ -140,6 +141,7 @@ export default function Settings() {
       <Group title="Help">
         <FieldRow label="Send feedback" value="›" onPress={() => router.push('/feedback')} />
         {user?.isAdmin ? <FieldRow label="Admin" value="›" onPress={() => router.push('/admin')} /> : null}
+        <UpdateRow />
       </Group>
 
       <Group title="Appearance">

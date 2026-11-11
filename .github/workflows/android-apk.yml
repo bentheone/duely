@@ -1,0 +1,81 @@
+name: Android APK
+
+# Builds the preview APK on GitHub's runners (free for public repos) instead of EAS cloud builds,
+# and publishes it as a GitHub Release tagged build-<run number>. The app checks the latest
+# release and offers the update (src/lib/updates.ts).
+#
+# Needs one repo secret: EXPO_TOKEN (expo.dev → Account settings → Access tokens). It lets
+# `eas build --local` fetch the app's signing keystore and the "preview" env vars from EAS,
+# so every APK is signed with the same key and installs over the previous one.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/mobile/**'
+      - 'packages/shared/**'
+      - 'modules/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/android-apk.yml'
+
+concurrency:
+  group: android-apk
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost "$AGENT_TOOLSDIRECTORY"
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: pnpm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:shared
+
+      - name: Build APK
+        working-directory: apps/mobile
+        env:
+          APP_BUILD_NUMBER: ${{ github.run_number }}
+          UPDATES_REPO: ${{ github.repository }}
+        run: eas build --local --platform android --profile preview --non-interactive --output "$GITHUB_WORKSPACE/duely.apk"
+
+      - name: Release notes
+        run: |
+          {
+            echo "Commit ${GITHUB_SHA::7}"
+            echo
+            git log -1 --pretty=%B
+          } > notes.txt
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Duely build ${{ github.run_number }}
+          body_path: notes.txt
+          files: duely.apk
+          make_latest: 'true'

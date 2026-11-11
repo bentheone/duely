@@ -3,6 +3,9 @@ import type { ExpoConfig } from 'expo/config';
 const API_URL = process.env.API_URL ?? 'http://10.0.2.2:3000';
 const GOOGLE_WEB_CLIENT_ID = process.env.GOOGLE_WEB_CLIENT_ID ?? '';
 const GOOGLE_ANDROID_CLIENT_ID = process.env.GOOGLE_ANDROID_CLIENT_ID ?? '';
+// GitHub Actions run number of the APK build (0 = EAS / local build). The in-app update check compares it.
+const BUILD_NUMBER = Number(process.env.APP_BUILD_NUMBER ?? 0) || 0;
+const UPDATES_REPO = process.env.UPDATES_REPO ?? 'bentheone/duely';
 
 const config: ExpoConfig = {
   name: 'Duely',
@@ -101,6 +104,8 @@ const config: ExpoConfig = {
     API_URL,
     GOOGLE_WEB_CLIENT_ID,
     GOOGLE_ANDROID_CLIENT_ID,
+    BUILD_NUMBER,
+    UPDATES_REPO,
     eas: { 
       projectId: '0ae9538e-49ab-4efd-ab8b-9a31399f5ebf'
     },

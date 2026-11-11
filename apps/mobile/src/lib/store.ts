@@ -16,10 +16,12 @@ interface AppState {
   lastSyncedAt: number | null;
   syncError: string | null;
   uploads: Record<string, UploadState>;
+  /** Semester the user picked or created on purpose (kept even while it has no courses). */
+  explicitSemesterId: string | null;
   hydrate(signedIn: boolean): void;
   setUser(u: User, google?: { connected: boolean; scopes: string[] }): void;
   updateSettings(patch: Partial<UserSettings>): void;
-  setActiveSemester(id: string | null): void;
+  setActiveSemester(id: string | null, explicit?: boolean): void;
   setOnboarded(v: boolean): void;
   setUpload(id: string, s: UploadState | null): void;
   set(p: Partial<Pick<AppState, 'online' | 'syncing' | 'lastSyncedAt' | 'syncError' | 'signedIn'>>): void;
@@ -46,6 +48,7 @@ export const useApp = create<AppState>((set, get) => ({
   lastSyncedAt: null,
   syncError: null,
   uploads: {},
+  explicitSemesterId: null,
   hydrate(signedIn) {
     const user = getMetaJson<User | null>('user', null);
     const g = getMetaJson<{ connected: boolean; scopes: string[] }>('google', { connected: false, scopes: [] });
@@ -56,6 +59,7 @@ export const useApp = create<AppState>((set, get) => ({
       googleConnected: g.connected,
       scopes: g.scopes,
       onboarded: getMeta('onboarded') === '1',
+      explicitSemesterId: getMeta('explicitSemesterId'),
       lastSyncedAt: Number(getMeta('lastSyncedAt')) || null,
     });
   },
@@ -77,13 +81,14 @@ export const useApp = create<AppState>((set, get) => ({
     setMeta('settingsDirty', '1');
     set({ user });
   },
-  setActiveSemester(id) {
+  setActiveSemester(id, explicit) {
     const u = get().user;
     if (!u) return;
     const user = { ...u, activeSemesterId: id };
     setMetaJson('user', user);
     setMeta('settingsDirty', '1');
-    set({ user });
+    if (explicit) setMeta('explicitSemesterId', id);
+    set({ user, ...(explicit ? { explicitSemesterId: id } : {}) });
   },
   setOnboarded(v) {
     setMeta('onboarded', v ? '1' : null);

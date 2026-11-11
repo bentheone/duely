@@ -5,7 +5,7 @@ import { DAY, EXAM_TYPE_LABELS, formatHHMM, formatShortDate, startOfZonedDay } f
 import { CourseLabel, Empty, Gap, PillButton, Screen, T } from '@/components/ui';
 import { TitleRow } from '@/components/ProfileButton';
 import { useCourses, useExams } from '@/lib/db/queries';
-import { useApp, useTz } from '@/lib/store';
+import { useTz } from '@/lib/store';
 import { syncNow } from '@/lib/sync/engine';
 import { FONTS } from '@/lib/theme';
 
@@ -13,7 +13,6 @@ export default function Exams() {
   const tz = useTz();
   const exams = useExams();
   const { active, byId } = useCourses();
-  const syncing = useApp((s) => s.syncing);
   const now = Date.now();
   const activeIds = useMemo(() => new Set(active.map((c) => c.id)), [active]);
   const upcoming = exams.filter((e) => activeIds.has(e.courseId) && e.startsAt > now - 3 * 3600_000);
@@ -40,7 +39,7 @@ export default function Exams() {
   };
 
   return (
-    <Screen onRefresh={() => void syncNow({ forceGoogle: true })} refreshing={syncing}>
+    <Screen onRefresh={() => syncNow({ forceGoogle: true })}>
       <TitleRow>
         <T v="display">Exams</T>
       </TitleRow>

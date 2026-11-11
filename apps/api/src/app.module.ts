@@ -19,6 +19,7 @@ import { ExportController } from './export/export.controller';
 import { connectMongo } from './db/connection';
 import { AccessRequestController, AdminController, FeedbackController } from './access/access.controller';
 import { MAILER, SmtpMailer } from './mail/mailer';
+import { ShareController } from './share/share.controller';
 import { config } from './config';
 
 @Controller('health')
@@ -46,6 +47,7 @@ export const DB_READY = Symbol('DB_READY');
     AccessRequestController,
     FeedbackController,
     AdminController,
+    ShareController,
   ],
   providers: [
     { provide: DB_READY, useFactory: () => connectMongo(config().mongoUri) },

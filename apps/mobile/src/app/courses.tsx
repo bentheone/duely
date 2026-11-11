@@ -132,7 +132,7 @@ export default function Courses() {
           options={semesters.map((s) => ({ value: s.id, label: s.name, hint: s.status === 'archived' ? 'Archived' : undefined }))}
           value={semester?.id}
           onSelect={(id) => {
-            useApp.getState().setActiveSemester(id);
+            useApp.getState().setActiveSemester(id, true);
             setSemSheet(false);
           }}
         />
@@ -167,7 +167,7 @@ export default function Courses() {
               disabled={!newSem.trim()}
               onPress={() => {
                 const y = new Date().getFullYear();
-                createSemester(newSem.trim(), `${y}-01-01`, `${y}-12-31`);
+                createSemester(newSem.trim(), `${y}-01-01`, `${y}-12-31`, true);
                 setNewSem(null);
                 setSemSheet(false);
               }}

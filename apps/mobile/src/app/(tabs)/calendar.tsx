@@ -1,14 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { Check, X } from 'lucide-react-native';
+import { Check, ChevronDown, X } from 'lucide-react-native';
 import {
-  DAY,
   MINUTE,
   MONTH_LONG,
   WEEKDAY_SHORT,
   dayKey,
+  isAssignmentOpen,
   formatHHMM,
   parseHHMM,
   startOfZonedDay,
@@ -25,8 +25,10 @@ import { TitleRow } from '@/components/ProfileButton';
 import { addManualSession, confirmSession } from '@/features/actions';
 import { useAssignments, useClassSessions, useCourses, useExams, useSessions } from '@/lib/db/queries';
 import { api } from '@/lib/api';
+import { syncNow } from '@/lib/sync/engine';
+import { MonthSheet, WeekStrip, mondayOf, type DayMarks } from '@/features/WeekStrip';
 import { useApp, useSettings, useTz } from '@/lib/store';
-import { FONTS, useTheme } from '@/lib/theme';
+import { useTheme } from '@/lib/theme';
 
 const HOUR_PX = 56;
 
@@ -82,8 +84,6 @@ export default function Calendar() {
     if (first) setSelected(startOfZonedDay(first.start, tz));
   }, [plan.data, tz]);
 
-  const stripStart = planning ? today : today - ((zonedParts(now, tz).weekday + 6) % 7) * DAY;
-  const days = Array.from({ length: 7 }, (_, i) => startOfZonedDay(stripStart + i * DAY + 12 * 3600_000, tz));
   const dayEnd = startOfZonedDay(selected + 36 * 3600_000, tz);
 
   const blocks = useMemo<Block[]>(() => {
@@ -130,14 +130,44 @@ export default function Calendar() {
     confirmSession({ ...s, status: 'confirmed' });
     setAccepted(new Set([...accepted, s.id]));
   };
+  // Dots under days with deadlines, exams, group meetings (muted) or planner suggestions (accent).
+  const marks = useMemo<DayMarks>(() => {
+    const m: DayMarks = new Map();
+    const activeIds = new Set(active.map((x) => x.id));
+    for (const a of assignments) {
+      if (a.dueAt != null && activeIds.has(a.courseId) && isAssignmentOpen(a)) m.set(dayKey(a.dueAt, tz), c.muted);
+      for (const mt of a.group?.meetings ?? []) m.set(dayKey(mt.at, tz), c.muted);
+    }
+    for (const e of exams) if (activeIds.has(e.courseId)) m.set(dayKey(e.startsAt, tz), c.danger);
+    for (const s of suggestions) m.set(dayKey(s.start, tz), c.suggestion);
+    return m;
+  }, [assignments, exams, suggestions, active, tz, c]);
+  const [monthOpen, setMonthOpen] = useState(false);
+  const thisWeek = mondayOf(selected, tz) === mondayOf(today, tz);
+
   const deadlineLabel = deadline ? WEEKDAY_SHORT[zonedParts(deadline, tz).weekday] : '';
   const sel = zonedParts(selected, tz);
+  const monthTitle = (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Pick a month"
+        onPress={() => setMonthOpen(true)}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 }}
+      >
+        <T v="display" numberOfLines={1} style={{ flexShrink: 1 }}>
+          {MONTH_LONG[sel.month - 1]}
+        </T>
+        <ChevronDown size={24} color={c.muted} />
+      </Pressable>
+      {!thisWeek ? <SmallButton title="Today" onPress={() => setSelected(today)} /> : null}
+    </View>
+  );
 
   return (
     <Screen
       back={planning}
-      onRefresh={planning ? () => void plan.refetch() : undefined}
-      refreshing={plan.isFetching}
+      onRefresh={planning ? () => plan.refetch() : () => syncNow()}
       footer={
         planning ? (
           <View style={{ gap: 10 }}>
@@ -163,13 +193,7 @@ export default function Calendar() {
         ) : undefined
       }
     >
-      {planning ? (
-        <T v="display">{MONTH_LONG[sel.month - 1]}</T>
-      ) : (
-        <TitleRow>
-          <T v="display">{MONTH_LONG[sel.month - 1]}</T>
-        </TitleRow>
-      )}
+      {planning ? monthTitle : <TitleRow>{monthTitle}</TitleRow>}
       {planning && (target || exam) ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
           <T tone="muted" numberOfLines={1} style={{ flex: 1 }}>
@@ -186,32 +210,8 @@ export default function Calendar() {
           </View>
         </View>
       ) : null}
-      <Gap h={20} />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-        {days.map((d) => {
-          const p = zonedParts(d, tz);
-          const isSel = dayKey(d, tz) === dayKey(selected, tz);
-          const hasSuggestion = suggestions.some((s) => dayKey(s.start, tz) === dayKey(d, tz));
-          return (
-            <Pressable
-              key={d}
-              accessibilityRole="button"
-              accessibilityState={{ selected: isSel }}
-              accessibilityLabel={`${WEEKDAY_SHORT[p.weekday]} ${p.day}`}
-              onPress={() => setSelected(d)}
-              style={{ width: 46, height: 66, borderRadius: 23, alignItems: 'center', justifyContent: 'center', backgroundColor: isSel ? c.primaryBg : 'transparent' }}
-            >
-              <T v="small" color={isSel ? c.primaryText : c.muted}>
-                {WEEKDAY_SHORT[p.weekday]!.slice(0, 1)}
-              </T>
-              <T style={{ fontFamily: FONTS.display, fontSize: 18 }} color={isSel ? c.primaryText : c.text}>
-                {p.day}
-              </T>
-              {hasSuggestion ? <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: isSel ? c.primaryText : c.suggestion, marginTop: 2 }} /> : null}
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+      <Gap h={16} />
+      <WeekStrip selected={selected} onSelect={setSelected} tz={tz} today={today} marks={marks} />
       <Gap h={20} />
 
       <View style={{ height: (lastHour - firstHour) * HOUR_PX + 8 }}>
@@ -262,6 +262,7 @@ export default function Calendar() {
           );
         })}
       </View>
+      <MonthSheet visible={monthOpen} onClose={() => setMonthOpen(false)} selected={selected} onSelect={setSelected} tz={tz} today={today} marks={marks} />
       {planning && plan.error ? (
         <T tone="danger" style={{ marginTop: 16 }}>
           {(plan.error as Error).message}

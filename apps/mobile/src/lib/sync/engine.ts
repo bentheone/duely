@@ -5,6 +5,8 @@ import { api, ApiError, getTokens } from '../api';
 import { getRawDb } from '../db/client';
 import { applyRemote, emitChange, getMeta, onDataChange, setMeta, setMetaJson } from '../db/repo';
 import { useApp } from '../store';
+import { snapshot } from '../db/queries';
+import { pickSemester } from '../semester';
 
 const PUSH_BATCH = 200;
 const GOOGLE_MIN_INTERVAL = 5 * 60 * 1000;
@@ -79,6 +81,16 @@ async function pull(): Promise<boolean> {
   return changed;
 }
 
+/** Points the stored active semester at the one the UI shows (see pickSemester) so alarms/server agree. */
+function healActiveSemester(): void {
+  const st = useApp.getState();
+  const u = st.user;
+  if (!u) return;
+  const snap = snapshot();
+  const picked = pickSemester(snap.semesters, snap.courses, u.activeSemesterId, st.explicitSemesterId);
+  if (picked && picked.id !== u.activeSemesterId) st.setActiveSemester(picked.id);
+}
+
 let profileFresh = false;
 /** Once per app launch: re-read /me so server-computed fields (e.g. isAdmin) reach older sign-ins. */
 async function refreshProfile(): Promise<void> {
@@ -112,10 +124,21 @@ async function googleSync(force: boolean): Promise<void> {
   await pull();
 }
 
-/** One full cycle: push → pull → settings → (debounced) Google sync. Concurrent calls coalesce. */
-export function syncNow(opts: { forceGoogle?: boolean } = {}): Promise<void> {
+const QUIET_WINDOW = 30_000;
+
+/**
+ * One full cycle: push → pull → settings → (debounced) Google sync. Concurrent calls coalesce.
+ * `background` (resume, reconnect): skipped when nothing is queued and the last sync was moments ago,
+ * so coming back from a file picker, share sheet or permission dialog doesn't hit the network again.
+ */
+export function syncNow(opts: { forceGoogle?: boolean; background?: boolean } = {}): Promise<void> {
+  if (opts.background) {
+    const last = useApp.getState().lastSyncedAt ?? 0;
+    if (Date.now() - last < QUIET_WINDOW && pendingCount() === 0) return running ?? Promise.resolve();
+  }
   if (running) {
-    again = true;
+    // Only queue a second cycle when there is something new to send.
+    if (!opts.background || pendingCount() > 0) again = true;
     return running;
   }
   running = (async () => {
@@ -127,6 +150,7 @@ export function syncNow(opts: { forceGoogle?: boolean } = {}): Promise<void> {
       await pull();
       await pushSettings();
       await refreshProfile();
+      healActiveSemester();
       await googleSync(!!opts.forceGoogle);
       const now = Date.now();
       setMeta('lastSyncedAt', String(now));
@@ -163,12 +187,12 @@ export function startSyncTriggers(): () => void {
   started = true;
   void syncNow();
   const offData = onDataChange((src) => src === 'local' && scheduleSync());
-  const appSub = AppState.addEventListener('change', (s) => s === 'active' && void syncNow());
+  const appSub = AppState.addEventListener('change', (s) => s === 'active' && void syncNow({ background: true }));
   let wasOnline = true;
   const offNet = NetInfo.addEventListener((s) => {
     const online = !!s.isConnected && s.isInternetReachable !== false;
     useApp.getState().set({ online });
-    if (online && !wasOnline) void syncNow();
+    if (online && !wasOnline) void syncNow({ background: true });
     wasOnline = online;
   });
   return () => {

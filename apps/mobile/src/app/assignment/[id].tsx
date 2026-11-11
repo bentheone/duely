@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Alert, Linking, Pressable, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Minus, MoreHorizontal, Plus } from 'lucide-react-native';
+import { Minus, MoreHorizontal, Plus, Share2 } from 'lucide-react-native';
 import {
   HOUR,
   STATUS_LABELS,
@@ -20,6 +20,7 @@ import { addSubtask, setStatus, toggleSubtask } from '@/features/actions';
 import { useAssignment, useCourses, useSessions, useSubtasks } from '@/lib/db/queries';
 import { remove, save } from '@/lib/db/repo';
 import { useTz } from '@/lib/store';
+import { shareItem } from '@/lib/share';
 import { FONTS, useTheme } from '@/lib/theme';
 
 type SheetKind = null | 'menu' | 'status' | 'grade' | 'progress';
@@ -57,9 +58,17 @@ export default function AssignmentScreen() {
     <Screen
       back
       right={
-        <IconButton label="More" onPress={() => setSheet('menu')}>
-          <MoreHorizontal size={20} color={c.text} />
-        </IconButton>
+        <>
+          <IconButton
+            label="Share with a friend"
+            onPress={() => shareItem('assignment', a.id, a.title).catch((e: Error) => Alert.alert('Couldn’t share', e.message))}
+          >
+            <Share2 size={20} color={c.text} />
+          </IconButton>
+          <IconButton label="More" onPress={() => setSheet('menu')}>
+            <MoreHorizontal size={20} color={c.text} />
+          </IconButton>
+        </>
       }
       footer={isAssignmentOpen(a) && a.dueAt ? <PillButton title="Plan a session" onPress={() => router.push({ pathname: '/calendar', params: { assignmentId: a.id } })} /> : undefined}
     >

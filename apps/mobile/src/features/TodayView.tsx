@@ -14,7 +14,7 @@ export interface TodayViewProps {
   initial?: string;
   status?: string | null;
   refreshing?: boolean;
-  onRefresh?: () => void;
+  onRefresh?: () => unknown;
   onOpen: (href: string) => void;
   onAvatar: () => void;
   onAdd: (courseId: string, classSessionId: string) => void;

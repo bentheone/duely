@@ -6,7 +6,7 @@ import { Chip, Empty, Gap, PillButton, Screen, T } from '@/components/ui';
 import { AssignmentRow } from '@/components/rows';
 import { TitleRow } from '@/components/ProfileButton';
 import { useAssignments, useCourses } from '@/lib/db/queries';
-import { useApp, useTz } from '@/lib/store';
+import { useTz } from '@/lib/store';
 import { syncNow } from '@/lib/sync/engine';
 
 /** §11.3 #5: course chips by short name; Overdue / This week / Later. */
@@ -14,7 +14,6 @@ export default function Assignments() {
   const tz = useTz();
   const all = useAssignments();
   const { active, byId } = useCourses();
-  const syncing = useApp((s) => s.syncing);
   const [filter, setFilter] = useState<string | null>(null);
   const [showDone, setShowDone] = useState(false);
   const now = Date.now();
@@ -47,7 +46,7 @@ export default function Assignments() {
   const empty = !groups.overdue.length && !groups.week.length && !groups.later.length;
 
   return (
-    <Screen onRefresh={() => void syncNow({ forceGoogle: true })} refreshing={syncing}>
+    <Screen onRefresh={() => syncNow({ forceGoogle: true })}>
       <TitleRow>
         <T v="display">Assignments</T>
       </TitleRow>

@@ -363,3 +363,33 @@ export async function serverInsert(
   const { id, ...rest } = record;
   await TABLE_MODELS[table].create({ createdAt: now, deletedAt: null, ...rest, _id: id, userId, rev, updatedAt: now });
 }
+
+// ---- Shares (assignment / exam snapshots sent to a friend) ----
+export interface ShareDoc {
+  _id: string; // random token
+  userId: string;
+  kind: 'assignment' | 'exam';
+  itemId: string;
+  payload: Record<string, unknown>;
+  opens: number;
+  createdAt: number;
+  updatedAt: number;
+  expiresAt: Date;
+}
+const shareSchema = new Schema<ShareDoc>(
+  {
+    _id: { type: String, required: true },
+    userId: { type: String, required: true },
+    kind: { type: String, required: true },
+    itemId: { type: String, required: true },
+    payload: { type: Mixed, required: true },
+    opens: { type: Number, default: 0 },
+    createdAt: Number,
+    updatedAt: Number,
+    // TTL: links stop working after 90 days.
+    expiresAt: { type: Date, required: true, index: { expires: 0 } },
+  },
+  { versionKey: false, minimize: false },
+);
+shareSchema.index({ userId: 1, kind: 1, itemId: 1 });
+export const ShareModel = model<ShareDoc>('Share', shareSchema);

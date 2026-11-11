@@ -15,6 +15,7 @@ import type {
 import { getDb } from './client';
 import * as s from './schema';
 import { useApp } from '../store';
+import { pickSemester } from '../semester';
 
 /** Reactive reads straight from SQLite (§6: UI reads only SQLite). Data sets are small; filter in JS. */
 function useRows<T>(query: Parameters<typeof useLiveQuery>[0], deps: unknown[] = []): T[] {
@@ -29,15 +30,10 @@ export function useSemesters(): Semester[] {
 
 export function useActiveSemester(): Semester | null {
   const semesters = useSemesters();
+  const courses = useAllCourses();
   const activeId = useApp((st) => st.user?.activeSemesterId);
-  return useMemo(
-    () =>
-      semesters.find((x) => x.id === activeId) ??
-      [...semesters].reverse().find((x) => x.status === 'active') ??
-      semesters[semesters.length - 1] ??
-      null,
-    [semesters, activeId],
-  );
+  const explicitId = useApp((st) => st.explicitSemesterId);
+  return useMemo(() => pickSemester(semesters, courses, activeId, explicitId), [semesters, courses, activeId, explicitId]);
 }
 
 export function useAllCourses(): Course[] {

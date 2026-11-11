@@ -13,6 +13,7 @@ import {
 import { getRecord, newId, save } from '@/lib/db/repo';
 import { snapshot } from '@/lib/db/queries';
 import { useApp } from '@/lib/store';
+import { pickSemester } from '@/lib/semester';
 
 // ---------- semesters ----------
 
@@ -22,18 +23,18 @@ export function defaultSemesterName(now = new Date()): string {
   return `${season} ${now.getFullYear()}`;
 }
 
-export function createSemester(name: string, startsOn: string, endsOn: string): Semester {
+export function createSemester(name: string, startsOn: string, endsOn: string, explicit = false): Semester {
   const s = save('semesters', { name, startsOn, endsOn, status: 'active' });
-  useApp.getState().setActiveSemester(s.id);
+  useApp.getState().setActiveSemester(s.id, explicit);
   return s;
 }
 
 /** Active semester, creating one if the user has none yet. */
 export function ensureSemester(): Semester {
   const snap = snapshot();
-  const activeId = useApp.getState().user?.activeSemesterId;
-  const found = snap.semesters.find((s) => s.id === activeId) ?? snap.semesters.filter((s) => s.status === 'active').pop();
-  if (found) return found;
+  const st = useApp.getState();
+  const found = pickSemester(snap.semesters, snap.courses, st.user?.activeSemesterId, st.explicitSemesterId);
+  if (found && found.status !== 'archived') return found;
   const y = new Date().getFullYear();
   return createSemester(defaultSemesterName(), `${y}-09-01`, `${y}-12-20`);
 }

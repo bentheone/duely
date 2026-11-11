@@ -461,3 +461,38 @@ describe('access requests, feedback, admin', () => {
     expect((googleCodeError({ response: { data: { error: 'invalid_grant' } } }) as BadGatewayException).getStatus()).toBe(502);
   });
 });
+
+describe('shares', () => {
+  test('owner shares an assignment; a friend reads the snapshot; landing page is public; others cannot share it', async () => {
+    const a = await ctx.signIn('share-a', 'ann@example.com');
+    const authA = { Authorization: `Bearer ${a.accessToken}` };
+    const sem = semester();
+    const c = course(uuidv7(), sem.id);
+    const asg = assignment(uuidv7(), c.id, sem.id, Date.now(), {
+      kind: 'group',
+      group: { members: [{ name: 'Me', isMe: true }, { name: 'Kim', isMe: false }], myPart: 'Slides', meetings: [], chatLink: null },
+    });
+    await ctx.http().post('/sync/push').set(authA).send({ changes: [{ table: 'semesters', record: sem }, { table: 'courses', record: c }, { table: 'assignments', record: asg }] }).expect(200);
+
+    const created = await ctx.http().post('/shares').set(authA).send({ kind: 'assignment', id: asg.id }).expect(201);
+    expect(created.body.url).toMatch(/\/s\/[A-Za-z0-9_-]+$/);
+    const again = await ctx.http().post('/shares').set(authA).send({ kind: 'assignment', id: asg.id }).expect(201);
+    expect(again.body.token).toBe(created.body.token);
+
+    const b = await ctx.signIn('share-b', 'ben@example.com');
+    const authB = { Authorization: `Bearer ${b.accessToken}` };
+    // Ben can't share Ann's assignment by id (scoped by userId).
+    await ctx.http().post('/shares').set(authB).send({ kind: 'assignment', id: asg.id }).expect(404);
+    const got = await ctx.http().get(`/shares/${created.body.token}`).set(authB).expect(200);
+    expect(got.body).toMatchObject({ kind: 'assignment', course: { shortName: c.shortName }, assignment: { title: asg.title, kind: 'group' } });
+    expect(got.body.assignment.group.myPart).toBeNull();
+    expect(got.body.assignment.group.members.every((m: { isMe: boolean }) => !m.isMe)).toBe(true);
+    expect(JSON.stringify(got.body)).not.toContain('ann@example.com');
+
+    await ctx.http().get(`/shares/${created.body.token}`).expect(401);
+    await ctx.http().get('/shares/nope!').set(authB).expect(404);
+    const page = await ctx.http().get(`/s/${created.body.token}`).expect(200);
+    expect(page.text).toContain(`duely://share/${created.body.token}`);
+    expect(page.text).not.toContain(asg.title);
+  });
+});

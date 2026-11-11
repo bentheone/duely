@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
+import { AppState, Platform, StatusBar as RNStatusBar } from 'react-native';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Crypto from 'expo-crypto';
@@ -22,6 +23,7 @@ import { DuelyAlarm } from '@/lib/alarms';
 import { installCrashLogging, safely } from '@/lib/crash';
 import { ErrorScreen } from '@/components/ErrorScreen';
 import { CrashNotice } from '@/components/CrashNotice';
+import { UpdatePrompt } from '@/components/UpdatePrompt';
 
 installCrashLogging();
 void SplashScreen.preventAutoHideAsync();
@@ -51,14 +53,32 @@ function Inner() {
     };
   }, [signedIn]);
 
+  // Light icons on the dark theme. Native screens (react-native-screens) and modal sheets reset the
+  // system bar appearance on Android, so set it per screen too and re-apply on resume.
+  const barStyle = scheme === 'dark' ? 'light' : 'dark';
+  useEffect(() => {
+    const apply = () => RNStatusBar.setBarStyle(barStyle === 'light' ? 'light-content' : 'dark-content', false);
+    apply();
+    const sub = AppState.addEventListener('change', (st) => st === 'active' && apply());
+    return () => sub.remove();
+  }, [barStyle]);
+
   return (
     <>
-      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.bg }, animation: 'fade_from_bottom' }}>
+      <StatusBar style={barStyle} />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: c.bg },
+          animation: 'fade_from_bottom',
+          ...(Platform.OS === 'android' ? { statusBarStyle: barStyle } : {}),
+        }}
+      >
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="quick-add" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
       </Stack>
       <CrashNotice />
+      {signedIn ? <UpdatePrompt /> : null}
     </>
   );
 }

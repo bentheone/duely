@@ -11,7 +11,6 @@ import { syncNow } from '@/lib/sync/engine';
 export default function Today() {
   const tz = useTz();
   const user = useApp((s) => s.user);
-  const syncing = useApp((s) => s.syncing);
   const syncError = useApp((s) => s.syncError);
   const courses = useAllCourses();
   const classSessions = useClassSessions();
@@ -39,8 +38,7 @@ export default function Today() {
       avatarUrl={user?.avatarUrl}
       initial={user?.name?.slice(0, 1)}
       status={syncError === 'offline' ? 'Offline — changes are saved on this phone' : syncError ? 'Sync paused — pull to retry' : null}
-      refreshing={syncing}
-      onRefresh={() => void syncNow({ forceGoogle: true })}
+      onRefresh={() => syncNow({ forceGoogle: true })}
       onOpen={(href) => router.push(href as never)}
       onAvatar={() => router.push('/courses')}
       onAdd={(courseId, classSessionId) => router.push({ pathname: '/quick-add', params: { courseId, classSessionId } })}

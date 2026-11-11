@@ -281,3 +281,9 @@ export const FeedbackBodySchema = z.object({
   device: z.string().max(120).optional(),
 });
 export const FeedbackPatchSchema = z.object({ read: z.boolean() });
+
+// ---- Sharing an assignment / exam with a friend (opened in the app only) ----
+export const SHARE_KINDS = ['assignment', 'exam'] as const;
+export const ShareCreateSchema = z.object({ kind: z.enum(SHARE_KINDS), id });
+/** Share tokens are random base64url strings. */
+export const ShareTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{8,40}$/);

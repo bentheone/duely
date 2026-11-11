@@ -85,30 +85,39 @@ export function validateFile(mime: string, size: number): void {
   if (size > MAX_FILE_BYTES) throw new BadRequestException('File is larger than 25 MB');
 }
 
+async function isOwnerUser(userId: string): Promise<boolean> {
+  const owner = config().ownerEmail;
+  if (!owner) return false;
+  const u = await UserModel.findById(userId).lean();
+  return u?.email.toLowerCase() === owner;
+}
+
+/** The user's Cloudinary credentials (their own, or the owner's account for the owner). Server-side only. */
+export async function cloudinaryCredsFor(userId: string): Promise<CloudinaryCreds | null> {
+  const sc = await StorageConfigModel.findOne({ userId }).lean();
+  const owner = config().ownerCloudinary;
+  if (sc?.provider === 'cloudinary' && sc.cloudinary && !sc.useOwner) {
+    return {
+      cloudName: sc.cloudinary.cloudName,
+      apiKey: sc.cloudinary.apiKey,
+      apiSecret: decrypt(sc.cloudinary.apiSecretEnc),
+      folder: sc.cloudinary.folder || 'duely',
+    };
+  }
+  if ((sc?.useOwner || !sc) && owner && (await isOwnerUser(userId))) return { ...owner, folder: 'duely' };
+  return null;
+}
+
 @Controller()
 export class StorageController {
   constructor(private readonly google: GoogleSyncService) {}
 
-  private async isOwner(userId: string): Promise<boolean> {
-    const owner = config().ownerEmail;
-    if (!owner) return false;
-    const u = await UserModel.findById(userId).lean();
-    return u?.email.toLowerCase() === owner;
+  private isOwner(userId: string): Promise<boolean> {
+    return isOwnerUser(userId);
   }
 
-  private async creds(userId: string): Promise<CloudinaryCreds | null> {
-    const sc = await StorageConfigModel.findOne({ userId }).lean();
-    const owner = config().ownerCloudinary;
-    if (sc?.provider === 'cloudinary' && sc.cloudinary && !sc.useOwner) {
-      return {
-        cloudName: sc.cloudinary.cloudName,
-        apiKey: sc.cloudinary.apiKey,
-        apiSecret: decrypt(sc.cloudinary.apiSecretEnc),
-        folder: sc.cloudinary.folder || 'duely',
-      };
-    }
-    if ((sc?.useOwner || !sc) && owner && (await this.isOwner(userId))) return { ...owner, folder: 'duely' };
-    return null;
+  private creds(userId: string): Promise<CloudinaryCreds | null> {
+    return cloudinaryCredsFor(userId);
   }
 
   @Get('storage')

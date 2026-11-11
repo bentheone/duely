@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -61,7 +61,9 @@ export function Screen({
 }: {
   children: React.ReactNode;
   scroll?: boolean;
-  onRefresh?: () => void;
+  /** Pull-to-refresh. Return a promise to keep the spinner up until it settles. */
+  onRefresh?: () => unknown;
+  /** Extra spinner condition (e.g. a query the user started). Background syncs never show it. */
   refreshing?: boolean;
   back?: boolean;
   right?: React.ReactNode;
@@ -70,6 +72,17 @@ export function Screen({
 }) {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
+  // Only the user's own pull shows the spinner; background syncs (tab switches, resume, after edits) stay silent.
+  const [pulling, setPulling] = useState(false);
+  const pull = onRefresh
+    ? () => {
+        setPulling(true);
+        Promise.resolve()
+          .then(onRefresh)
+          .catch(() => undefined)
+          .finally(() => setPulling(false));
+      }
+    : undefined;
   const header =
     back || right ? (
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
@@ -94,7 +107,7 @@ export function Screen({
         <KeyboardAwareScrollView
           bottomOffset={footer ? 120 : 32}
           keyboardShouldPersistTaps="handled"
-          refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.muted} colors={[c.text]} progressBackgroundColor={c.surface} /> : undefined}
+          refreshControl={pull ? <RefreshControl refreshing={pulling || refreshing} onRefresh={pull} tintColor={c.muted} colors={[c.text]} progressBackgroundColor={c.surface} /> : undefined}
         >
           {content}
         </KeyboardAwareScrollView>
