@@ -129,6 +129,13 @@ async function googleSync(force: boolean): Promise<void> {
 
 const QUIET_WINDOW = 30_000;
 
+const syncedListeners = new Set<() => void>();
+/** Runs after each successful sync (e.g. saving community posts marked auto-save). */
+export function onSynced(fn: () => void): () => void {
+  syncedListeners.add(fn);
+  return () => syncedListeners.delete(fn);
+}
+
 /**
  * One full cycle: push → pull → settings → (debounced) Google sync. Concurrent calls coalesce.
  * `background` (resume, reconnect): skipped when nothing is queued and the last sync was moments ago,
@@ -158,6 +165,13 @@ export function syncNow(opts: { forceGoogle?: boolean; background?: boolean } = 
       const now = Date.now();
       setMeta('lastSyncedAt', String(now));
       st.set({ lastSyncedAt: now, syncError: null, online: true });
+      for (const fn of syncedListeners) {
+        try {
+          fn();
+        } catch {
+          // a listener must never break sync
+        }
+      }
     } catch (e) {
       const offline = !(e instanceof ApiError);
       st.set({ syncError: offline ? 'offline' : (e as Error).message, online: !offline });

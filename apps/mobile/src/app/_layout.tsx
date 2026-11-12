@@ -16,7 +16,8 @@ import { ThemeProvider, useTheme } from '@/lib/theme';
 import { getDb } from '@/lib/db/client';
 import { getTokens, setSignedOutHandler } from '@/lib/api';
 import { useApp } from '@/lib/store';
-import { startSyncTriggers } from '@/lib/sync/engine';
+import { onSynced, startSyncTriggers } from '@/lib/sync/engine';
+import { autoSaveCommunityPosts } from '@/lib/communityAutoSave';
 import { startDerived } from '@/lib/derived';
 import { initNotifications, listenToNotificationResponses } from '@/lib/notifications';
 import { DuelyAlarm } from '@/lib/alarms';
@@ -39,6 +40,7 @@ function Inner() {
     if (!signedIn) return;
     safely('initNotifications', initNotifications);
     const stops: (() => void)[] = [];
+    safely('communityAutoSave', () => stops.push(onSynced(() => void autoSaveCommunityPosts())));
     safely('startSyncTriggers', () => stops.push(startSyncTriggers()));
     safely('startDerived', () => stops.push(startDerived()));
     safely('notificationResponses', () => stops.push(listenToNotificationResponses()));

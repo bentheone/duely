@@ -412,7 +412,7 @@ export interface CommunityDoc {
   name: string;
   course: { code: string; shortName: string; title: string; color: string };
   ownerId: string;
-  members: { userId: string; role: 'owner' | 'member'; joinedAt: number }[];
+  members: { userId: string; role: 'owner' | 'member'; joinedAt: number; autoSave?: boolean; autoSaveSince?: number | null }[];
   inviteToken: string;
   createdAt: number;
   updatedAt: number;
@@ -425,7 +425,7 @@ const communitySchema = new Schema<CommunityDoc>(
     name: { type: String, required: true },
     course: { type: Mixed, required: true },
     ownerId: { type: String, required: true },
-    members: { type: [{ userId: String, role: String, joinedAt: Number, _id: false }], default: [] },
+    members: { type: [{ userId: String, role: String, joinedAt: Number, autoSave: Boolean, autoSaveSince: Number, _id: false }], default: [] },
     inviteToken: { type: String, required: true, unique: true },
     createdAt: Number,
     updatedAt: Number,
@@ -446,6 +446,9 @@ export interface CommunityPostDoc {
   payload: Record<string, unknown>;
   createdAt: number;
   deletedAt?: number | null;
+  autoSave?: boolean;
+  /** Members whose apps already saved it automatically (so other devices don't save it twice). */
+  savedBy?: string[];
 }
 const postSchema = new Schema<CommunityPostDoc>(
   {
@@ -457,6 +460,8 @@ const postSchema = new Schema<CommunityPostDoc>(
     payload: { type: Mixed, required: true },
     createdAt: Number,
     deletedAt: { type: Number, default: null },
+    autoSave: { type: Boolean, default: false },
+    savedBy: { type: [String], default: [] },
   },
   { versionKey: false, minimize: false },
 );

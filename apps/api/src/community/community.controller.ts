@@ -3,8 +3,10 @@ import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import type { z } from 'zod';
 import {
+  CommunityAckSchema,
   CommunityCreateSchema,
   CommunityJoinSchema,
+  CommunityMemberPatchSchema,
   CommunityPostCreateSchema,
   ShareTokenSchema,
   uuidv7,
@@ -46,6 +48,7 @@ export class CommunityController {
       inviteUrl: `${origin(req)}/c/${c.inviteToken}`,
       createdAt: c.createdAt,
       lastPostAt: c.lastPostAt ?? null,
+      myAutoSave: !!c.members.find((m) => m.userId === userId)?.autoSave,
     };
   }
 
@@ -58,7 +61,7 @@ export class CommunityController {
       name: b.name,
       course: b.course,
       ownerId: u.userId,
-      members: [{ userId: u.userId, role: 'owner', joinedAt: now }],
+      members: [{ userId: u.userId, role: 'owner', joinedAt: now, autoSave: false, autoSaveSince: null }],
       inviteToken: token(),
       createdAt: now,
       updatedAt: now,
@@ -97,12 +100,64 @@ export class CommunityController {
   async join(@CurrentUser() u: AuthedUser, @Req() req: Request, @Body(new ZodPipe(CommunityJoinSchema)) b: z.infer<typeof CommunityJoinSchema>) {
     const c = await CommunityModel.findOneAndUpdate(
       { inviteToken: b.token, deletedAt: null, 'members.userId': { $ne: u.userId } },
-      { $push: { members: { userId: u.userId, role: 'member', joinedAt: Date.now() } }, $set: { updatedAt: Date.now() } },
+      {
+        $push: { members: { userId: u.userId, role: 'member', joinedAt: Date.now(), autoSave: !!b.autoSave, autoSaveSince: b.autoSave ? Date.now() : null } },
+        $set: { updatedAt: Date.now() },
+      },
       { new: true },
     ).lean();
     const doc = c ?? (await CommunityModel.findOne({ inviteToken: b.token, deletedAt: null }).lean());
     if (!doc) throw new NotFoundException('This invite expired or was reset.');
     return this.view(doc, u.userId, req);
+  }
+
+  /**
+   * Creator posts marked auto-save, from communities where I opted in, that my account hasn't saved
+   * yet. The app saves them through /sync and acks them.
+   */
+  @Get('communities/auto-saves')
+  async autoSaves(@CurrentUser() u: AuthedUser): Promise<CommunityPost[]> {
+    const coms = await CommunityModel.find({ deletedAt: null, members: { $elemMatch: { userId: u.userId, autoSave: true } } }).lean();
+    const out: CommunityPost[] = [];
+    for (const c of coms) {
+      if (c.ownerId === u.userId) continue;
+      const me = c.members.find((m) => m.userId === u.userId)!;
+      const rows = await CommunityPostModel.find({
+        communityId: c._id,
+        deletedAt: null,
+        autoSave: true,
+        authorId: c.ownerId,
+        kind: { $ne: 'resource' },
+        savedBy: { $ne: u.userId },
+        createdAt: { $gte: me.autoSaveSince ?? me.joinedAt },
+      })
+        .sort({ createdAt: 1 })
+        .limit(50)
+        .lean();
+      const owner = await UserModel.findById(c.ownerId, { name: 1 }).lean();
+      out.push(...rows.map((p) => toPost(p, u.userId, owner?.name ?? 'Creator')));
+    }
+    return out.slice(0, 100);
+  }
+
+  @Post('communities/auto-saves/ack')
+  @HttpCode(204)
+  async ackAutoSaves(@CurrentUser() u: AuthedUser, @Body(new ZodPipe(CommunityAckSchema)) b: z.infer<typeof CommunityAckSchema>) {
+    const mine = (await CommunityModel.find({ 'members.userId': u.userId }, { _id: 1 }).lean()).map((c) => c._id);
+    await CommunityPostModel.updateMany({ _id: { $in: b.ids }, communityId: { $in: mine } }, { $addToSet: { savedBy: u.userId } });
+  }
+
+  /** My membership settings (auto-save the creator's posts). */
+  @Post('communities/:id/me')
+  @HttpCode(200)
+  async patchMe(@CurrentUser() u: AuthedUser, @Req() req: Request, @Param('id') id: string, @Body(new ZodPipe(CommunityMemberPatchSchema)) b: z.infer<typeof CommunityMemberPatchSchema>) {
+    await this.load(id, u.userId);
+    const doc = await CommunityModel.findOneAndUpdate(
+      { _id: id, 'members.userId': u.userId },
+      { $set: { 'members.$.autoSave': b.autoSave, 'members.$.autoSaveSince': b.autoSave ? Date.now() : null } },
+      { new: true },
+    ).lean();
+    return this.view(doc!, u.userId, req);
   }
 
   @Get('communities/:id')
@@ -190,6 +245,9 @@ export class CommunityController {
       payload: payload as unknown as Record<string, unknown>,
       createdAt: now,
       deletedAt: null,
+      // Only the creator can push items into members' accounts (and never links).
+      autoSave: b.kind !== 'resource' && !!b.autoSave && c.ownerId === u.userId,
+      savedBy: [],
     };
     await CommunityPostModel.create(doc);
     await CommunityModel.updateOne({ _id: id }, { $set: { lastPostAt: now, updatedAt: now } });
@@ -234,5 +292,6 @@ function toPost(p: CommunityPostDoc, me: string, authorName: string): CommunityP
     mine: p.authorId === me,
     item: { ...(p.payload as unknown as Omit<SharedItem, 'token'>), token: p._id },
     createdAt: p.createdAt,
+    autoSave: !!p.autoSave,
   };
 }

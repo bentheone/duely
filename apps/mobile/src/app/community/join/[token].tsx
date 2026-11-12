@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert, Switch } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Community, CommunityInvite } from '@duely/shared';
-import { CourseLabel, Gap, OptionList, PillButton, Screen, T } from '@/components/ui';
+import { CourseLabel, FieldRow, Gap, OptionList, PillButton, Screen, T } from '@/components/ui';
+import { autoSaveCommunityPosts } from '@/lib/communityAutoSave';
+import { useTheme } from '@/lib/theme';
 import { upsertCourse } from '@/features/actions';
 import { api, ApiError } from '@/lib/api';
 import { courseForCode } from '@/lib/community';
@@ -26,6 +28,8 @@ export default function JoinCommunity() {
   const qc = useQueryClient();
   const [choice, setChoice] = useState<string>(ADD);
   const [busy, setBusy] = useState(false);
+  const [autoSave, setAutoSave] = useState(true);
+  const { c } = useTheme();
 
   const q = useQuery({
     queryKey: ['invite', token],
@@ -40,8 +44,9 @@ export default function JoinCommunity() {
     if (!inv) return;
     setBusy(true);
     try {
-      const com = await api<Community>('/communities/join', { body: { token } });
+      const com = await api<Community>('/communities/join', { body: { token, autoSave } });
       await qc.invalidateQueries({ queryKey: ['communities'] });
+      if (autoSave) void autoSaveCommunityPosts(true);
       router.replace(`/community/${com.id}`);
     } catch (e) {
       Alert.alert('Couldn’t join', e instanceof ApiError ? e.message : 'Check your connection.');
@@ -120,6 +125,14 @@ export default function JoinCommunity() {
       <T v="display">{inv.name}</T>
       <Gap h={10} />
       <CourseLabel color={inv.course.color} name={inv.course.shortName} suffix={inv.course.code} />
+      <Gap h={20} />
+      <FieldRow
+        label={`Auto-save ${inv.ownerName}’s posts`}
+        right={<Switch value={autoSave} onValueChange={setAutoSave} trackColor={{ true: c.text, false: c.surfaceButton }} thumbColor={c.bg} accessibilityLabel="Auto-save the creator's posts" />}
+      />
+      <T v="small" tone="muted" style={{ marginTop: 6 }}>
+        Assignments, quizzes and study sessions the creator marks “save for members” land in your Duely and calendar by themselves. Change it any time.
+      </T>
       <Gap h={28} />
       {matched ? (
         <T tone="muted">Shared items will go into your {matched.shortName}.</T>

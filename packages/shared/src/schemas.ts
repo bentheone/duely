@@ -346,12 +346,16 @@ export const CommunityCourseSchema = z.object({
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
 });
 export const CommunityCreateSchema = z.object({ name: z.string().trim().min(2).max(80), course: CommunityCourseSchema });
-export const CommunityJoinSchema = z.object({ token: ShareTokenSchema });
+export const CommunityJoinSchema = z.object({ token: ShareTokenSchema, autoSave: z.boolean().optional() });
+export const CommunityMemberPatchSchema = z.object({ autoSave: z.boolean() });
+export const CommunityAckSchema = z.object({ ids: z.array(z.string().max(64)).max(100) });
+/** autoSave: the creator asks members' apps to save it for them (members who opted in). */
+const autoSave = z.boolean().optional();
 export const CommunityPostCreateSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('assignment'), id }),
-  z.object({ kind: z.literal('exam'), id }),
-  z.object({ kind: z.literal('lecture'), id }),
-  z.object({ kind: z.literal('session'), id }),
+  z.object({ kind: z.literal('assignment'), id, autoSave }),
+  z.object({ kind: z.literal('exam'), id, autoSave }),
+  z.object({ kind: z.literal('lecture'), id, autoSave }),
+  z.object({ kind: z.literal('session'), id, autoSave }),
   z.object({
     kind: z.literal('resource'),
     title: z.string().trim().min(1).max(200),

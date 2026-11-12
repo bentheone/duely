@@ -196,6 +196,8 @@ export interface Community {
   inviteUrl: string;
   createdAt: number;
   lastPostAt: number | null;
+  /** I let the creator's auto-save posts be saved into my account. */
+  myAutoSave: boolean;
 }
 export interface CommunityInvite {
   communityId: string;
@@ -212,5 +214,7 @@ export interface CommunityPost {
   mine: boolean;
   /** Snapshot of the shared thing; `token` is the post id. */
   item: SharedItem;
+  /** Creator marked it to be saved to opted-in members automatically. */
+  autoSave: boolean;
   createdAt: number;
 }

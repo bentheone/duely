@@ -601,3 +601,48 @@ describe('communities', () => {
     expect(now.body.members).toHaveLength(1);
   });
 });
+
+describe('community auto-save', () => {
+  test('creator posts marked auto-save reach opted-in members once; members cannot force it', async () => {
+    const a = await ctx.signIn('auto-a', 'ana@example.com');
+    const b = await ctx.signIn('auto-b', 'bo@example.com');
+    const c = await ctx.signIn('auto-c', 'cy@example.com');
+    const [A, B, C] = [a, b, c].map((t) => ({ Authorization: `Bearer ${t.accessToken}` }));
+    const com = (await ctx.http().post('/communities').set(A).send({ name: 'Nets', course: { code: 'INSY 8211', shortName: 'Networks', title: 'Networks', color: '#2563EB' } }).expect(201)).body;
+    const joinedB = await ctx.http().post('/communities/join').set(B).send({ token: com.inviteToken, autoSave: true }).expect(200);
+    expect(joinedB.body.myAutoSave).toBe(true);
+    await ctx.http().post('/communities/join').set(C).send({ token: com.inviteToken }).expect(200);
+
+    const pushItem = async (auth: Record<string, string>) => {
+      const sem = semester();
+      const cid = uuidv7();
+      const asg = assignment(uuidv7(), cid, sem.id, Date.now(), { title: `Quiz prep ${cid.slice(-4)}` });
+      await ctx.http().post('/sync/push').set(auth).send({ changes: [{ table: 'semesters', record: sem }, { table: 'courses', record: course(cid, sem.id) }, { table: 'assignments', record: asg }] }).expect(200);
+      return asg;
+    };
+    const fromA = await pushItem(A);
+    const fromB = await pushItem(B);
+    const optional = await pushItem(A);
+    const postA = (await ctx.http().post(`/communities/${com.id}/posts`).set(A).send({ kind: 'assignment', id: fromA.id, autoSave: true }).expect(201)).body;
+    expect(postA.autoSave).toBe(true);
+    await ctx.http().post(`/communities/${com.id}/posts`).set(A).send({ kind: 'assignment', id: optional.id, autoSave: false }).expect(201);
+    const postB = (await ctx.http().post(`/communities/${com.id}/posts`).set(B).send({ kind: 'assignment', id: fromB.id, autoSave: true }).expect(201)).body;
+    expect(postB.autoSave).toBe(false); // only the creator can auto-save into members' accounts
+
+    const pending = await ctx.http().get('/communities/auto-saves').set(B).expect(200);
+    expect(pending.body.map((p: { id: string }) => p.id)).toEqual([postA.id]);
+    expect((await ctx.http().get('/communities/auto-saves').set(C).expect(200)).body).toEqual([]);
+    expect((await ctx.http().get('/communities/auto-saves').set(A).expect(200)).body).toEqual([]);
+
+    await ctx.http().post('/communities/auto-saves/ack').set(B).send({ ids: [postA.id] }).expect(204);
+    expect((await ctx.http().get('/communities/auto-saves').set(B).expect(200)).body).toEqual([]);
+
+    // C turns it on later: only posts from then on.
+    const on = await ctx.http().post(`/communities/${com.id}/me`).set(C).send({ autoSave: true }).expect(200);
+    expect(on.body.myAutoSave).toBe(true);
+    expect((await ctx.http().get('/communities/auto-saves').set(C).expect(200)).body).toEqual([]);
+    const later = await pushItem(A);
+    const postLater = (await ctx.http().post(`/communities/${com.id}/posts`).set(A).send({ kind: 'assignment', id: later.id, autoSave: true }).expect(201)).body;
+    expect((await ctx.http().get('/communities/auto-saves').set(C).expect(200)).body.map((p: { id: string }) => p.id)).toEqual([postLater.id]);
+  });
+});

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, Linking, Pressable, Share, View } from 'react-native';
+import { Alert, Linking, Pressable, Share, Switch, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
@@ -17,12 +17,13 @@ import {
   type CommunityPost,
   type SharedItem,
 } from '@duely/shared';
-import { CourseLabel, Empty, Gap, IconButton, Input, OptionList, PillButton, Screen, Segmented, Sheet, SmallButton, T } from '@/components/ui';
+import { CourseLabel, Empty, FieldRow, Gap, IconButton, Input, OptionList, PillButton, Screen, Segmented, Sheet, SmallButton, T } from '@/components/ui';
 import { upsertCourse } from '@/features/actions';
 import { api, ApiError } from '@/lib/api';
 import { courseForCode } from '@/lib/community';
 import { useAllCourses, useAssignments, useExams, useLectures, useSessions } from '@/lib/db/queries';
-import { getMetaJson } from '@/lib/db/repo';
+import { getMeta, getMetaJson } from '@/lib/db/repo';
+import { autoSaveCommunityPosts } from '@/lib/communityAutoSave';
 import { saveShared } from '@/lib/share';
 import { pendingCount, syncNow } from '@/lib/sync/engine';
 import { useApp, useTz } from '@/lib/store';
@@ -59,6 +60,7 @@ export default function CommunityScreen() {
   const [sheet, setSheet] = useState<null | 'invite' | 'post' | 'members' | 'more'>(null);
   const [kind, setKind] = useState<PostKind>('assignment');
   const [res, setRes] = useState({ title: '', url: '', note: '' });
+  const [forMembers, setForMembers] = useState<'optional' | 'auto'>('optional');
   const [, bump] = useState(0);
 
   const com = useQuery({ queryKey: ['community', id], queryFn: () => api<Community>(`/communities/${id}`), enabled: !!id && online });
@@ -71,7 +73,7 @@ export default function CommunityScreen() {
   const post = useMutation({
     mutationFn: async (body: Record<string, unknown>) => {
       if (pendingCount() > 0) await syncNow();
-      return api<CommunityPost>(`/communities/${id}/posts`, { body });
+      return api<CommunityPost>(`/communities/${id}/posts`, { body: { ...body, ...(cm?.isOwner && body.kind !== 'resource' ? { autoSave: forMembers === 'auto' } : {}) } });
     },
     onSuccess: () => {
       setSheet(null);
@@ -182,6 +184,7 @@ export default function CommunityScreen() {
           >
             <T v="small" tone="muted">
               {p.mine ? 'You' : p.author.name.split(' ')[0]} · {KIND_LABEL[p.item.kind]} · {d.day} {MONTH_SHORT[d.month - 1]}
+              {p.autoSave ? (getMeta(`cpostAuto:${p.id}`) ? ' · Auto-saved' : ' · For everyone') : ''}
             </T>
             <T v="item">{itemTitle(p.item)}</T>
             {itemMeta(p.item, tz) ? (
@@ -245,6 +248,22 @@ export default function CommunityScreen() {
           value={kind}
           onChange={setKind}
         />
+        {cm.isOwner && kind !== 'resource' ? (
+          <>
+            <Gap h={12} />
+            <Segmented
+              options={[
+                { value: 'optional', label: 'Members choose' },
+                { value: 'auto', label: 'Save for members' },
+              ]}
+              value={forMembers}
+              onChange={setForMembers}
+            />
+            <T v="small" tone="muted" style={{ marginTop: 6 }}>
+              {forMembers === 'auto' ? 'Saved straight into the accounts (and calendars) of members who allow auto-save.' : 'Members tap Save if they want it.'}
+            </T>
+          </>
+        ) : null}
         <Gap h={16} />
         {kind === 'resource' ? (
           <View style={{ gap: 10 }}>
@@ -288,6 +307,30 @@ export default function CommunityScreen() {
       </Sheet>
 
       <Sheet visible={sheet === 'more'} onClose={() => setSheet(null)}>
+        {!cm.isOwner ? (
+          <>
+            <FieldRow
+              label="Auto-save creator’s posts"
+              right={
+                <Switch
+                  value={cm.myAutoSave}
+                  onValueChange={(v) =>
+                    void api<Community>(`/communities/${id}/me`, { method: 'POST', body: { autoSave: v } })
+                      .then(() => com.refetch())
+                      .then(() => (v ? autoSaveCommunityPosts(true) : 0))
+                      .catch((e: Error) => Alert.alert('Couldn’t change it', e.message))
+                  }
+                  trackColor={{ true: c.text, false: c.surfaceButton }}
+                  thumbColor={c.bg}
+                  accessibilityLabel="Auto-save the creator's posts"
+                />
+              }
+            />
+            <T v="small" tone="muted" style={{ marginTop: 6, marginBottom: 12 }}>
+              Only items the creator marks “save for members”, from now on.
+            </T>
+          </>
+        ) : null}
         <OptionList
           options={[{ value: 'leave', label: 'Leave community' }, ...(cm.isOwner ? [{ value: 'delete', label: 'Delete community' }] : [])]}
           onSelect={(v) => {
