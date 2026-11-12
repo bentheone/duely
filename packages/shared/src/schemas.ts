@@ -34,6 +34,7 @@ export const SettingsSchema = z.object({
   }),
   workHours: z.object({ start: hhmm, end: hhmm }),
   sessionDefaultMinutes: z.number().int().min(15).max(480),
+  communities: z.object({ notify: z.boolean() }).optional(),
   /** Optional: users created before lectures existed don't have it (defaults fill in). */
   lectures: z
     .object({
@@ -52,6 +53,7 @@ export const SettingsPatchSchema = z
     workHours: SettingsSchema.shape.workHours.partial(),
     sessionDefaultMinutes: SettingsSchema.shape.sessionDefaultMinutes,
     lectures: SettingsSchema.shape.lectures.unwrap().partial(),
+    communities: SettingsSchema.shape.communities.unwrap().partial(),
     activeSemesterId: z.string().nullable(),
     timezone: z.string(),
   })
@@ -68,6 +70,19 @@ export const UserSchema = z.object({
   activeSemesterId: z.string().nullable().optional(),
   /** Server-computed (ADMIN_EMAILS / OWNER_EMAIL); never client-writable. */
   isAdmin: z.boolean().optional(),
+  /** Public handle shown to colleagues (lowercase, unique). */
+  username: z.string().nullable().optional(),
+});
+
+export const USERNAME_RE = /^[a-z0-9_.]{3,20}$/;
+export const ProfilePatchSchema = z.object({
+  username: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .transform((v) => v.replace(/^@/, ''))
+    .pipe(z.string().regex(USERNAME_RE, '3–20 letters, numbers, _ or .'))
+    .nullable(),
 });
 
 export const SemesterSchema = z.object({

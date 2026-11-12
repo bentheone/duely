@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Linking, Pressable, Share, Switch, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -66,6 +66,13 @@ export default function CommunityScreen() {
   const com = useQuery({ queryKey: ['community', id], queryFn: () => api<Community>(`/communities/${id}`), enabled: !!id && online });
   const posts = useQuery({ queryKey: ['community', id, 'posts'], queryFn: () => api<CommunityPost[]>(`/communities/${id}/posts`), enabled: !!id && online });
   const cm = com.data;
+  // Opening the community clears its badge (server-side, so every device agrees).
+  useEffect(() => {
+    if (!id || !posts.data) return;
+    void api(`/communities/${id}/seen`, { method: 'POST' })
+      .then(() => qc.invalidateQueries({ queryKey: ['communities'] }))
+      .catch(() => undefined);
+  }, [id, posts.data, qc]);
   const myCourse = cm ? courseForCode(cm.course.code, all) : null;
 
   const refresh = () => Promise.all([com.refetch(), posts.refetch()]);
@@ -296,7 +303,14 @@ export default function CommunityScreen() {
       <Sheet visible={sheet === 'members'} onClose={() => setSheet(null)} title="Members">
         {cm.members.map((m) => (
           <View key={m.id} style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <T v="body">{m.name}</T>
+            <View style={{ flex: 1 }}>
+              <T v="body">{m.name}</T>
+              {m.username ? (
+                <T v="small" tone="muted">
+                  @{m.username}
+                </T>
+              ) : null}
+            </View>
             {m.role === 'owner' ? (
               <T v="small" tone="muted">
                 Owner

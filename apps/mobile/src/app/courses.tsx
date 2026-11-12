@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 import { router } from 'expo-router';
 import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
-import { ChevronDown, ChevronRight, MessageSquare, Plus, Settings as Gear, ShieldCheck, Users } from 'lucide-react-native';
+import { ChevronDown, ChevronRight, MessageSquare, Plus, Settings as Gear, ShieldCheck } from 'lucide-react-native';
 import { WEEKDAY_SHORT, zonedParts } from '@duely/shared';
 import { Card, Dot, Gap, IconButton, OptionList, Screen, Sheet, SmallButton, T } from '@/components/ui';
 import { useActiveSemester, useClassSessions, useCourses, useSemesters } from '@/lib/db/queries';
@@ -48,9 +48,6 @@ export default function Courses() {
               <ShieldCheck size={20} color={c.text} />
             </IconButton>
           ) : null}
-          <IconButton label="Communities" onPress={() => router.push('/communities')}>
-            <Users size={20} color={c.text} />
-          </IconButton>
           <IconButton label="Send feedback" onPress={() => router.push('/feedback')}>
             <MessageSquare size={20} color={c.text} />
           </IconButton>

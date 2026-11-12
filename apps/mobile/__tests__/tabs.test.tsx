@@ -47,7 +47,15 @@ jest.mock('@/lib/db/queries', () => ({
   useLectures: () => mockLectures,
 }));
 jest.mock('@/lib/sync/engine', () => ({ syncNow: jest.fn(() => Promise.resolve()) }));
-jest.mock('@/lib/api', () => ({ api: jest.fn(() => Promise.resolve({ suggestions: [], busy: [] })) }));
+jest.mock('@/lib/api', () => ({
+  api: jest.fn((path: string) => {
+    const course = { code: 'INSY 8311', shortName: 'PL/SQL', title: 'PL/SQL', color: '#EA580C' };
+    if (path === '/communities') return Promise.resolve([{ id: 'k1', name: 'PL/SQL crew', course, isOwner: true, members: [], inviteToken: 't', inviteUrl: 'u', createdAt: 0, lastPostAt: null, myAutoSave: false, unread: 2 }]);
+    if (path === '/colleagues') return Promise.resolve([{ id: 'p1', name: 'Kim', username: 'kim_k', avatarUrl: null, communities: [{ id: 'k1', name: 'PL/SQL crew', course }] }]);
+    return Promise.resolve({ suggestions: [], busy: [] });
+  }),
+  ApiError: class extends Error {},
+}));
 jest.mock('@/features/actions', () => ({ logMissed: jest.fn(), addManualSession: jest.fn(), confirmSession: jest.fn() }));
 jest.mock('@/lib/store', () => {
   const { DEFAULT_SETTINGS } = jest.requireActual('@duely/shared');
@@ -64,13 +72,21 @@ import Today from '@/app/(tabs)/today';
 import Assignments from '@/app/(tabs)/assignments';
 import Calendar from '@/app/calendar';
 import Lectures from '@/app/(tabs)/lectures';
-import Exams from '@/app/(tabs)/exams';
+import Communities from '@/app/(tabs)/communities';
+import { fireEvent } from '@testing-library/react-native';
 
 const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
 const wrap = (el: React.ReactElement) => <QueryClientProvider client={qc}>{el}</QueryClientProvider>;
 afterEach(() => qc.clear());
 
 describe('bottom-nav tabs render', () => {
+  test('Communities + Colleagues', async () => {
+    await render(wrap(<Communities />));
+    expect(await screen.findByText('PL/SQL crew')).toBeTruthy();
+    expect(screen.getByLabelText('2 new')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Colleagues'));
+    expect(await screen.findByText('@kim_k · PL/SQL')).toBeTruthy();
+  });
   test('Today', async () => {
     await render(wrap(<Today />));
     expect(screen.getAllByText(/Lab/).length).toBeGreaterThan(0);
@@ -93,8 +109,9 @@ describe('bottom-nav tabs render', () => {
     // Today's class ended? It's listed to log only after it ends — the heading exists either way.
     expect(screen.getByLabelText('Courses and settings')).toBeTruthy();
   });
-  test('Exams', async () => {
-    await render(wrap(<Exams />));
+  test('Exams (under Assignments)', async () => {
+    await render(wrap(<Assignments />));
+    await fireEvent.press(screen.getByLabelText('Exams'));
     expect(screen.getByText('Midterm')).toBeTruthy();
     expect(screen.getByLabelText('Courses and settings')).toBeTruthy();
   });

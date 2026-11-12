@@ -646,3 +646,39 @@ describe('community auto-save', () => {
     expect((await ctx.http().get('/communities/auto-saves').set(C).expect(200)).body.map((p: { id: string }) => p.id)).toEqual([postLater.id]);
   });
 });
+
+describe('usernames, colleagues, activity, unread', () => {
+  test('profile username is unique; colleagues are people I share a community with; unread clears when seen', async () => {
+    const a = await ctx.signIn('col-a', 'kai@example.com');
+    const b = await ctx.signIn('col-b', 'lea@example.com');
+    const z = await ctx.signIn('col-z', 'zed@example.com');
+    const [A, B, Z] = [a, b, z].map((t) => ({ Authorization: `Bearer ${t.accessToken}` }));
+
+    const set = await ctx.http().patch('/me/profile').set(A).send({ username: ' @Kai.Dev ' }).expect(200);
+    expect(set.body.username).toBe('kai.dev');
+    await ctx.http().patch('/me/profile').set(B).send({ username: 'kai.dev' }).expect(409);
+    await ctx.http().patch('/me/profile').set(B).send({ username: 'no' }).expect(400);
+    await ctx.http().patch('/me/profile').set(B).send({ username: 'lea_k' }).expect(200);
+
+    const com = (await ctx.http().post('/communities').set(A).send({ name: 'Soft Eng', course: { code: 'SENG 8215', shortName: 'Soft Eng', title: 'Software Engineering', color: '#7C3AED' } }).expect(201)).body;
+    const since = Date.now();
+    await ctx.http().post('/communities/join').set(B).send({ token: com.inviteToken }).expect(200);
+
+    const colA = await ctx.http().get('/colleagues').set(A).expect(200);
+    expect(colA.body).toEqual([expect.objectContaining({ name: expect.any(String), username: 'lea_k', communities: [expect.objectContaining({ id: com.id, name: 'Soft Eng' })] })]);
+    expect((await ctx.http().get('/colleagues').set(Z).expect(200)).body).toEqual([]);
+
+    await ctx.http().post(`/communities/${com.id}/posts`).set(A).send({ kind: 'resource', title: 'Slides week 9' }).expect(201);
+    const act = await ctx.http().get(`/communities/activity?since=${since}`).set(B).expect(200);
+    expect(act.body.posts).toHaveLength(1);
+    expect(act.body.posts[0]).toMatchObject({ communityName: 'Soft Eng', autoSavedForMe: false, item: { resource: { title: 'Slides week 9' } } });
+    expect((await ctx.http().get(`/communities/activity?since=${act.body.now}`).set(B).expect(200)).body.posts).toEqual([]);
+    expect((await ctx.http().get(`/communities/activity?since=${since}`).set(A).expect(200)).body.posts).toEqual([]); // own posts
+
+    const before = await ctx.http().get(`/communities/${com.id}`).set(B).expect(200);
+    expect(before.body.unread).toBe(1);
+    expect((await ctx.http().get(`/communities/${com.id}`).set(A).expect(200)).body.unread).toBe(0);
+    await ctx.http().post(`/communities/${com.id}/seen`).set(B).expect(204);
+    expect((await ctx.http().get('/communities').set(B).expect(200)).body[0].unread).toBe(0);
+  });
+});

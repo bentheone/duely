@@ -86,7 +86,7 @@ export function ExamWidget({ data }: { data: WidgetData }) {
   return (
     <FlexWidget
       clickAction="OPEN_URI"
-      clickActionData={{ uri: 'duely://exams' }}
+      clickActionData={{ uri: 'duely://assignments?view=exams' }}
       style={{ height: 'match_parent', width: 'match_parent', backgroundColor: bg, borderRadius: 24, padding: 18, flexDirection: 'column', justifyContent: 'flex-end' }}
     >
       <TextWidget text={data.exam ? `${data.exam.days}d` : '—'} style={{ fontSize: 48, color: fg, fontWeight: '600' }} />

@@ -1,20 +1,15 @@
 import React, { useState } from 'react';
 import { Alert } from 'react-native';
-import { useQuery } from '@tanstack/react-query';
-import type { Community } from '@duely/shared';
 import { OptionList, Sheet, T } from '@/components/ui';
 import { api, ApiError } from '@/lib/api';
 import { shareItem } from '@/lib/share';
 import { pendingCount, syncNow } from '@/lib/sync/engine';
 import { useApp } from '@/lib/store';
+import { useCommunities } from '@/lib/communityQueries';
+
+export { useCommunities };
 
 const norm = (s: string) => s.replace(/\s+/g, '').toLowerCase();
-
-/** My communities (cached; refreshed when a share sheet or the communities screen opens). */
-export function useCommunities(enabled = true) {
-  const online = useApp((s) => s.online);
-  return useQuery({ queryKey: ['communities'], queryFn: () => api<Community[]>('/communities'), enabled: enabled && online, staleTime: 60_000 });
-}
 
 /**
  * "Share" for an assignment / exam / lecture / study session: a private link to one friend, or a post

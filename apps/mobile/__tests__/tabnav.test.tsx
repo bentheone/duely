@@ -27,7 +27,7 @@ jest.mock('@/lib/db/queries', () => ({
   useLectures: () => [],
 }));
 jest.mock('@/lib/sync/engine', () => ({ syncNow: jest.fn(() => Promise.resolve()) }));
-jest.mock('@/lib/api', () => ({ api: jest.fn(() => Promise.resolve({ suggestions: [], busy: [] })) }));
+jest.mock('@/lib/api', () => ({ api: jest.fn((p: string) => Promise.resolve(p === '/communities' || p === '/colleagues' ? [] : { suggestions: [], busy: [] })), ApiError: class extends Error {} }));
 jest.mock('@/features/actions', () => ({ logMissed: jest.fn(), addManualSession: jest.fn(), confirmSession: jest.fn() }));
 jest.mock('@/lib/store', () => {
   const { DEFAULT_SETTINGS } = jest.requireActual('@duely/shared');
@@ -42,7 +42,7 @@ import Today from '@/app/(tabs)/today';
 import Assignments from '@/app/(tabs)/assignments';
 import Calendar from '@/app/calendar';
 import Lectures from '@/app/(tabs)/lectures';
-import Exams from '@/app/(tabs)/exams';
+import Communities from '@/app/(tabs)/communities';
 
 const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
 afterEach(() => qc.clear());
@@ -65,7 +65,7 @@ test('switching between all bottom-nav tabs keeps the app alive', async () => {
       '(tabs)/assignments': Assignments,
       '(tabs)/lectures': Lectures,
       calendar: Calendar,
-      '(tabs)/exams': Exams,
+      '(tabs)/communities': Communities,
       'quick-add': () => null,
     },
     { initialUrl: '/today' },
@@ -74,9 +74,9 @@ test('switching between all bottom-nav tabs keeps the app alive', async () => {
   for (const [label, text] of [
     ['Assignments', 'Nothing due'],
     ['Lectures', 'No lectures yet'],
-    ['Exams', 'No exams coming up'],
+    ['Communities', 'None yet'],
     ['Today', 'Nothing today.'],
-    ['Exams', 'No exams coming up'],
+    ['Communities', 'None yet'],
   ] as const) {
     await act(async () => {
       await fireEvent.press(screen.getByLabelText(label));

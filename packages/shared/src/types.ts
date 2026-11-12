@@ -183,6 +183,7 @@ export interface CommunityCourse {
 export interface CommunityMember {
   id: string;
   name: string;
+  username: string | null;
   avatarUrl: string | null;
   role: 'owner' | 'member';
 }
@@ -198,6 +199,8 @@ export interface Community {
   lastPostAt: number | null;
   /** I let the creator's auto-save posts be saved into my account. */
   myAutoSave: boolean;
+  /** Posts by others since I last opened it (badge). */
+  unread: number;
 }
 export interface CommunityInvite {
   communityId: string;
@@ -217,4 +220,19 @@ export interface CommunityPost {
   /** Creator marked it to be saved to opted-in members automatically. */
   autoSave: boolean;
   createdAt: number;
+}
+
+/** Someone I share at least one community with. */
+export interface Colleague {
+  id: string;
+  name: string;
+  username: string | null;
+  avatarUrl: string | null;
+  communities: { id: string; name: string; course: CommunityCourse }[];
+}
+
+/** New posts in my communities (for notifications). */
+export interface CommunityActivity {
+  posts: (CommunityPost & { communityName: string; autoSavedForMe: boolean })[];
+  now: number;
 }

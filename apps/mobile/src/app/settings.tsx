@@ -5,6 +5,7 @@ import { UpdateRow } from '@/components/UpdateRow';
 import { useQuery } from '@tanstack/react-query';
 import { DEFAULT_SETTINGS, WEEKDAY_LONG, formatHHMM, parseHHMM, zonedTime, type UserSettings } from '@duely/shared';
 import { refreshDerived } from '@/lib/derived';
+import { UsernameSheet } from '@/features/UsernameSheet';
 import { FieldRow, Gap, OptionList, Screen, Sheet, SmallButton, T } from '@/components/ui';
 import { pickTime } from '@/components/pickers';
 import { AlarmCheck, PermissionRows } from '@/features/Permissions';
@@ -42,6 +43,7 @@ export default function Settings() {
   const update = useApp((st) => st.updateSettings);
   const storage = useQuery({ queryKey: ['storage'], queryFn: fetchStorageInfo });
   const [sheet, setSheet] = useState<SheetKind>(null);
+  const [usernameOpen, setUsernameOpen] = useState(false);
   const [folder, setFolder] = useState(phoneFolderUri());
 
   const patch = (p: Partial<UserSettings>) => {
@@ -76,6 +78,11 @@ export default function Settings() {
     <Screen back>
       <T v="display">Settings</T>
       <Gap h={28} />
+
+      <Group title="Profile">
+        <FieldRow label="Name" value={user?.name ?? '—'} />
+        <FieldRow label="Username" value={user?.username ? `@${user.username}` : 'Set'} onPress={() => setUsernameOpen(true)} />
+      </Group>
 
       <Group title="Google">
         <FieldRow label="Account" value={user?.email} />
@@ -123,6 +130,10 @@ export default function Settings() {
         <Gap h={8} />
         <PermissionRows />
         <AlarmCheck />
+      </Group>
+
+      <Group title="Communities">
+        {toggle('Notify about new posts', (s.communities ?? DEFAULT_SETTINGS.communities).notify, (v) => patch({ communities: { notify: v } }))}
       </Group>
 
       <Group title="Lectures">
@@ -223,6 +234,7 @@ export default function Settings() {
           }}
         />
       </Sheet>
+      <UsernameSheet visible={usernameOpen} onClose={() => setUsernameOpen(false)} />
       <Sheet visible={sheet === 'theme'} onClose={() => setSheet(null)} title="Theme">
         <OptionList
           options={[

@@ -23,12 +23,15 @@ import { ShareController } from './share/share.controller';
 import { CommunityController } from './community/community.controller';
 import { config } from './config';
 
+/** Keep in step with package.json / the app version on every release. */
+export const API_VERSION = '1.2.0';
+
 @Controller('health')
 export class HealthController {
   @Public()
   @Get()
   health() {
-    return { ok: true, db: mongoose.connection.readyState === 1 ? 'up' : 'down', time: Date.now() };
+    return { ok: true, version: API_VERSION, db: mongoose.connection.readyState === 1 ? 'up' : 'down', time: Date.now() };
   }
 }
 

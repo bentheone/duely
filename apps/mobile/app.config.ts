@@ -10,7 +10,7 @@ const UPDATES_REPO = process.env.UPDATES_REPO ?? 'bentheone/duely';
 const config: ExpoConfig = {
   name: 'Duely',
   slug: 'duely',
-  version: '1.0.0',
+  version: '1.2.0',
   orientation: 'portrait',
   icon: './assets/brand/expo/icon.png',
   scheme: 'duely',

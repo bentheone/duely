@@ -10,7 +10,9 @@ import {
   CommunityPostCreateSchema,
   ShareTokenSchema,
   uuidv7,
+  type Colleague,
   type Community,
+  type CommunityActivity,
   type CommunityInvite,
   type CommunityPost,
   type SharedItem,
@@ -36,19 +38,30 @@ export class CommunityController {
   }
 
   private async view(c: CommunityDoc, userId: string, req: Request): Promise<Community> {
-    const users = await UserModel.find({ _id: { $in: c.members.map((m) => m.userId) } }, { name: 1, avatarUrl: 1 }).lean();
+    const users = await UserModel.find({ _id: { $in: c.members.map((m) => m.userId) } }, { name: 1, avatarUrl: 1, username: 1 }).lean();
     const byId = new Map(users.map((u) => [u._id, u]));
+    const me = c.members.find((m) => m.userId === userId);
+    const unread = me
+      ? await CommunityPostModel.countDocuments({ communityId: c._id, deletedAt: null, authorId: { $ne: userId }, createdAt: { $gt: me.lastSeenAt ?? me.joinedAt } })
+      : 0;
     return {
       id: c._id,
       name: c.name,
       course: c.course,
       isOwner: c.ownerId === userId,
-      members: c.members.map((m) => ({ id: m.userId, name: byId.get(m.userId)?.name ?? 'Member', avatarUrl: byId.get(m.userId)?.avatarUrl ?? null, role: m.role })),
+      members: c.members.map((m) => ({
+        id: m.userId,
+        name: byId.get(m.userId)?.name ?? 'Member',
+        username: byId.get(m.userId)?.username ?? null,
+        avatarUrl: byId.get(m.userId)?.avatarUrl ?? null,
+        role: m.role,
+      })),
       inviteToken: c.inviteToken,
       inviteUrl: `${origin(req)}/c/${c.inviteToken}`,
       createdAt: c.createdAt,
       lastPostAt: c.lastPostAt ?? null,
-      myAutoSave: !!c.members.find((m) => m.userId === userId)?.autoSave,
+      myAutoSave: !!me?.autoSave,
+      unread,
     };
   }
 
@@ -111,6 +124,44 @@ export class CommunityController {
     return this.view(doc, u.userId, req);
   }
 
+  /** People I share a community with (joined theirs, or they joined mine). */
+  @Get('colleagues')
+  async colleagues(@CurrentUser() u: AuthedUser): Promise<Colleague[]> {
+    const coms = await CommunityModel.find({ 'members.userId': u.userId, deletedAt: null }).lean();
+    const shared = new Map<string, Colleague['communities']>();
+    for (const c of coms)
+      for (const m of c.members)
+        if (m.userId !== u.userId) shared.set(m.userId, [...(shared.get(m.userId) ?? []), { id: c._id, name: c.name, course: c.course }]);
+    const users = await UserModel.find({ _id: { $in: [...shared.keys()] } }, { name: 1, avatarUrl: 1, username: 1 }).lean();
+    return users
+      .map((x) => ({ id: x._id, name: x.name || 'Member', username: x.username ?? null, avatarUrl: x.avatarUrl ?? null, communities: shared.get(x._id) ?? [] }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  /** Others' posts in my communities since `since` (ms) — the app turns them into notifications. */
+  @Get('communities/activity')
+  async activity(@CurrentUser() u: AuthedUser, @Query('since') since?: string): Promise<CommunityActivity> {
+    const now = Date.now();
+    const from = since && /^\d+$/.test(since) ? Number(since) : now;
+    const coms = await CommunityModel.find({ 'members.userId': u.userId, deletedAt: null }).lean();
+    if (!coms.length) return { posts: [], now };
+    const byId = new Map(coms.map((c) => [c._id, c]));
+    const rows = await CommunityPostModel.find({ communityId: { $in: [...byId.keys()] }, deletedAt: null, authorId: { $ne: u.userId }, createdAt: { $gt: from, $lte: now } })
+      .sort({ createdAt: 1 })
+      .limit(30)
+      .lean();
+    const names = new Map((await UserModel.find({ _id: { $in: [...new Set(rows.map((r) => r.authorId))] } }, { name: 1 }).lean()).map((x) => [x._id, x.name]));
+    return {
+      now,
+      posts: rows.map((p) => {
+        const c = byId.get(p.communityId)!;
+        const me = c.members.find((m) => m.userId === u.userId);
+        const autoSavedForMe = !!p.autoSave && p.authorId === c.ownerId && !!me?.autoSave && p.createdAt >= (me.autoSaveSince ?? me.joinedAt);
+        return { ...toPost(p, u.userId, names.get(p.authorId) ?? 'Member'), communityName: c.name, autoSavedForMe };
+      }),
+    };
+  }
+
   /**
    * Creator posts marked auto-save, from communities where I opted in, that my account hasn't saved
    * yet. The app saves them through /sync and acks them.
@@ -145,6 +196,14 @@ export class CommunityController {
   async ackAutoSaves(@CurrentUser() u: AuthedUser, @Body(new ZodPipe(CommunityAckSchema)) b: z.infer<typeof CommunityAckSchema>) {
     const mine = (await CommunityModel.find({ 'members.userId': u.userId }, { _id: 1 }).lean()).map((c) => c._id);
     await CommunityPostModel.updateMany({ _id: { $in: b.ids }, communityId: { $in: mine } }, { $addToSet: { savedBy: u.userId } });
+  }
+
+  /** Opened the community: clears its unread badge (on every device). */
+  @Post('communities/:id/seen')
+  @HttpCode(204)
+  async seen(@CurrentUser() u: AuthedUser, @Param('id') id: string) {
+    await this.load(id, u.userId);
+    await CommunityModel.updateOne({ _id: id, 'members.userId': u.userId }, { $set: { 'members.$.lastSeenAt': Date.now() } });
   }
 
   /** My membership settings (auto-save the creator's posts). */

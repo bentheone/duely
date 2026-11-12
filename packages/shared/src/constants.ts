@@ -35,6 +35,7 @@ export const DEFAULT_SETTINGS = {
   workHours: { start: '07:00', end: '22:00' },
   sessionDefaultMinutes: 90,
   lectures: { logReminder: true, recapReminder: true, recapLeadMinutes: 20 },
+  communities: { notify: true },
 };
 
 export type UserSettings = typeof DEFAULT_SETTINGS;

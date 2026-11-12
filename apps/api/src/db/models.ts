@@ -41,6 +41,7 @@ export interface UserDoc {
   timezone: string;
   settings: typeof DEFAULT_SETTINGS;
   activeSemesterId?: string | null;
+  username?: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -53,6 +54,7 @@ export const UserModel = model<UserDoc>(
       email: { type: String, required: true },
       name: { type: String, default: '' },
       avatarUrl: { type: String, default: null },
+      username: { type: String, default: undefined, index: { unique: true, sparse: true } },
       timezone: { type: String, default: DEFAULT_TIMEZONE },
       settings: { type: Mixed, default: () => structuredClone(DEFAULT_SETTINGS) },
       activeSemesterId: { type: String, default: null },
@@ -412,7 +414,7 @@ export interface CommunityDoc {
   name: string;
   course: { code: string; shortName: string; title: string; color: string };
   ownerId: string;
-  members: { userId: string; role: 'owner' | 'member'; joinedAt: number; autoSave?: boolean; autoSaveSince?: number | null }[];
+  members: { userId: string; role: 'owner' | 'member'; joinedAt: number; autoSave?: boolean; autoSaveSince?: number | null; lastSeenAt?: number | null }[];
   inviteToken: string;
   createdAt: number;
   updatedAt: number;
@@ -425,7 +427,7 @@ const communitySchema = new Schema<CommunityDoc>(
     name: { type: String, required: true },
     course: { type: Mixed, required: true },
     ownerId: { type: String, required: true },
-    members: { type: [{ userId: String, role: String, joinedAt: Number, autoSave: Boolean, autoSaveSince: Number, _id: false }], default: [] },
+    members: { type: [{ userId: String, role: String, joinedAt: Number, autoSave: Boolean, autoSaveSince: Number, lastSeenAt: Number, _id: false }], default: [] },
     inviteToken: { type: String, required: true, unique: true },
     createdAt: Number,
     updatedAt: Number,

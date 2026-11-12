@@ -2,14 +2,13 @@ import React, { useMemo } from 'react';
 import { Pressable, View } from 'react-native';
 import { router } from 'expo-router';
 import { DAY, EXAM_TYPE_LABELS, formatHHMM, formatShortDate, startOfZonedDay } from '@duely/shared';
-import { CourseLabel, Empty, Gap, PillButton, Screen, T } from '@/components/ui';
-import { TitleRow } from '@/components/ProfileButton';
+import { CourseLabel, Empty, Gap, PillButton, T } from '@/components/ui';
 import { useCourses, useExams } from '@/lib/db/queries';
 import { useTz } from '@/lib/store';
-import { syncNow } from '@/lib/sync/engine';
 import { FONTS } from '@/lib/theme';
 
-export default function Exams() {
+/** Exams list (upcoming countdowns, then past) — shown under Assignments via the header switch. */
+export function ExamsList() {
   const tz = useTz();
   const exams = useExams();
   const { active, byId } = useCourses();
@@ -39,11 +38,7 @@ export default function Exams() {
   };
 
   return (
-    <Screen onRefresh={() => syncNow({ forceGoogle: true })}>
-      <TitleRow>
-        <T v="display">Exams</T>
-      </TitleRow>
-      <Gap h={24} />
+    <>
       {upcoming.length === 0 ? <Empty title="No exams coming up" action={<PillButton title="Add exam" onPress={() => router.push('/quick-add')} />} /> : null}
       {upcoming.map((e) => row(e))}
       {past.length ? (
@@ -52,6 +47,6 @@ export default function Exams() {
           {past.map((e) => row(e, true))}
         </>
       ) : null}
-    </Screen>
+    </>
   );
 }

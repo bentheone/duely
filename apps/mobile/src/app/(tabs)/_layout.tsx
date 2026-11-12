@@ -4,7 +4,9 @@ import { Tabs, type BottomTabBarProps } from 'expo-router/tabs';
 import { Redirect, router, type ErrorBoundaryProps } from 'expo-router';
 import { ErrorScreen } from '@/components/ErrorScreen';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BookOpen, GraduationCap, House, NotebookPen, Plus } from 'lucide-react-native';
+import { BookOpen, House, NotebookPen, Plus, Users } from 'lucide-react-native';
+import { CountBadge } from '@/components/CountBadge';
+import { useCommunities } from '@/lib/communityQueries';
 import { useTheme } from '@/lib/theme';
 import { useApp } from '@/lib/store';
 
@@ -12,16 +14,16 @@ const ICONS: Record<string, { Icon: typeof House; label: string }> = {
   today: { Icon: House, label: 'Today' },
   assignments: { Icon: BookOpen, label: 'Assignments' },
   lectures: { Icon: NotebookPen, label: 'Lectures' },
-  exams: { Icon: GraduationCap, label: 'Exams' },
+  communities: { Icon: Users, label: 'Communities' },
 };
 
 const TAB_BAR = { height: 64, gap: 12, side: 20 };
-const SLOT_ORDER = ['today', 'assignments', '+', 'lectures', 'exams'] as const;
+const SLOT_ORDER = ['today', 'assignments', '+', 'lectures', 'communities'] as const;
 const PILL_W = 52;
 const PILL_H = 44;
 
 /**
- * Floating, icon-only bar: Today · Assignments · (+) · Lectures · Exams (Calendar lives on Today).
+ * Floating, icon-only bar: Today · Assignments (+ Exams) · (+) · Lectures · Communities. Calendar lives on Today.
  * Active tab: a soft pill slides behind the icon (ink) with the brand's small accent dot under it.
  */
 function TabBar({ state, navigateToTab }: BottomTabBarProps) {
@@ -29,6 +31,8 @@ function TabBar({ state, navigateToTab }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const [width, setWidth] = React.useState(0);
   const active = state.routes[state.index];
+  const communities = useCommunities();
+  const unread = (communities.data ?? []).reduce((n, x) => n + (x.unread ?? 0), 0);
   const activeName = active?.name ?? 'today';
   const slot = Math.max(0, SLOT_ORDER.indexOf(activeName as (typeof SLOT_ORDER)[number]));
   const slotW = width / SLOT_ORDER.length;
@@ -141,6 +145,11 @@ function TabBar({ state, navigateToTab }: BottomTabBarProps) {
               style={{ flex: 1, height: TAB_BAR.height, alignItems: 'center', justifyContent: 'center', paddingBottom: 3 }}
             >
               <Icon size={22} color={focused ? c.text : c.faintIcon} strokeWidth={focused ? 2.3 : 2} />
+              {name === 'communities' && unread > 0 ? (
+                <View pointerEvents="none" style={{ position: 'absolute', top: 12, left: '50%', marginLeft: 6 }}>
+                  <CountBadge n={unread} small />
+                </View>
+              ) : null}
             </Pressable>
           );
         })}
@@ -161,7 +170,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="today" />
       <Tabs.Screen name="assignments" />
       <Tabs.Screen name="lectures" />
-      <Tabs.Screen name="exams" />
+      <Tabs.Screen name="communities" />
     </Tabs>
   );
 }

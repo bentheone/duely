@@ -8,7 +8,10 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import type { ErrorBoundaryProps } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from '@/lib/queryClient';
+import { checkCommunityActivity } from '@/lib/communityActivity';
+import { registerBackgroundTasks } from '@/lib/backgroundTasks';
 import { useFonts, SpaceGrotesk_600SemiBold } from '@expo-google-fonts/space-grotesk';
 import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold } from '@expo-google-fonts/inter';
 import { setUuidRandomSource } from '@duely/shared';
@@ -30,7 +33,7 @@ installCrashLogging();
 void SplashScreen.preventAutoHideAsync();
 setUuidRandomSource((bytes) => Crypto.getRandomValues(bytes));
 
-const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 60_000 } } });
+
 
 function Inner() {
   const { c, scheme } = useTheme();
@@ -40,7 +43,15 @@ function Inner() {
     if (!signedIn) return;
     safely('initNotifications', initNotifications);
     const stops: (() => void)[] = [];
-    safely('communityAutoSave', () => stops.push(onSynced(() => void autoSaveCommunityPosts())));
+    safely('communityAutoSave', () =>
+      stops.push(
+        onSynced(() => {
+          void autoSaveCommunityPosts();
+          void checkCommunityActivity();
+        }),
+      ),
+    );
+    safely('backgroundTasks', () => void registerBackgroundTasks().catch(() => undefined));
     safely('startSyncTriggers', () => stops.push(startSyncTriggers()));
     safely('startDerived', () => stops.push(startDerived()));
     safely('notificationResponses', () => stops.push(listenToNotificationResponses()));

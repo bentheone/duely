@@ -13,6 +13,7 @@ import { currentSettings, currentTz } from './store';
 
 export const CHANNEL_REMINDERS = 'reminders';
 export const CHANNEL_PROMPTS = 'prompts';
+export const CHANNEL_COMMUNITY = 'community';
 export const CATEGORY_CLASS_END = 'classEnd';
 const WEEKLY_ID = 'weekly-review';
 
@@ -33,6 +34,10 @@ export async function initNotifications(): Promise<void> {
     await Notifications.setNotificationChannelAsync(CHANNEL_REMINDERS, {
       name: 'Due reminders',
       importance: Notifications.AndroidImportance.HIGH,
+    });
+    await Notifications.setNotificationChannelAsync(CHANNEL_COMMUNITY, {
+      name: 'Community posts',
+      importance: Notifications.AndroidImportance.DEFAULT,
     });
     await Notifications.setNotificationChannelAsync(CHANNEL_PROMPTS, {
       name: 'Missed-assignment checks',

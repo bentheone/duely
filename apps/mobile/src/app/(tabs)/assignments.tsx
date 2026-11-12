@@ -1,16 +1,23 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { DAY, isAssignmentOpen, startOfZonedDay } from '@duely/shared';
 import { Chip, Empty, Gap, PillButton, Screen, T } from '@/components/ui';
 import { AssignmentRow } from '@/components/rows';
 import { TitleRow } from '@/components/ProfileButton';
+import { HeaderSwitch } from '@/components/HeaderSwitch';
+import { ExamsList } from '@/features/ExamsList';
 import { useAssignments, useCourses } from '@/lib/db/queries';
 import { useTz } from '@/lib/store';
 import { syncNow } from '@/lib/sync/engine';
 
 /** §11.3 #5: course chips by short name; Overdue / This week / Later. */
 export default function Assignments() {
+  const { view } = useLocalSearchParams<{ view?: string }>();
+  const [tab, setTab] = useState<'assignments' | 'exams'>(view === 'exams' ? 'exams' : 'assignments');
+  useEffect(() => {
+    if (view === 'exams' || view === 'assignments') setTab(view);
+  }, [view]);
   const tz = useTz();
   const all = useAssignments();
   const { active, byId } = useCourses();
@@ -48,9 +55,20 @@ export default function Assignments() {
   return (
     <Screen onRefresh={() => syncNow({ forceGoogle: true })}>
       <TitleRow>
-        <T v="display">Assignments</T>
+        <HeaderSwitch
+          options={[
+            { value: 'assignments', label: 'Assignments' },
+            { value: 'exams', label: 'Exams' },
+          ]}
+          value={tab}
+          onChange={setTab}
+        />
       </TitleRow>
       <Gap h={20} />
+      {tab === 'exams' ? (
+        <ExamsList />
+      ) : (
+      <>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} style={{ marginHorizontal: -28 }} contentInset={{ left: 28 }}>
         <View style={{ width: 20 }} />
         <Chip label="All" selected={!filter} onPress={() => setFilter(null)} />
@@ -74,6 +92,8 @@ export default function Assignments() {
         </Pressable>
       ) : null}
       {showDone ? groups.done.map((a) => <AssignmentRow key={a.id} a={a} course={byId.get(a.courseId)} now={now} tz={tz} />) : null}
+      </>
+      )}
     </Screen>
   );
 }
