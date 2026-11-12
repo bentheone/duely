@@ -19,6 +19,8 @@ export interface GEvent {
   recurringEventId?: string | null;
   colorId?: string | null;
   duelySessionId?: string | null;
+  /** RRULE lines for recurring events Duely writes (course class times). */
+  recurrence?: string[] | null;
 }
 
 export interface GTask {
@@ -104,6 +106,7 @@ function eventToApi(ev: Partial<GEvent>, tz: string) {
     start: ev.start != null ? { dateTime: new Date(ev.start).toISOString(), timeZone: tz } : undefined,
     end: ev.end != null ? { dateTime: new Date(ev.end).toISOString(), timeZone: tz } : undefined,
     extendedProperties: ev.duelySessionId ? { private: { duelySessionId: ev.duelySessionId } } : undefined,
+    recurrence: ev.recurrence ?? undefined,
   };
 }
 

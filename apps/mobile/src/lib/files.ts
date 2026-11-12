@@ -23,6 +23,7 @@ import { getMeta, getMetaJson, getRecord, newId, save, setMeta, setMetaJson } fr
 import { currentTz, useApp } from './store';
 
 export const ACCEPTED_TYPES = [...ALLOWED_MIME];
+export type FileOwnerType = 'assignment' | 'exam' | 'lecture';
 const FILES_DIR = `${FS.documentDirectory}files/`;
 
 // ---------- local cache table ----------
@@ -61,6 +62,10 @@ function guessMime(name: string, fallback?: string | null): string {
     png: 'image/png',
     webp: 'image/webp',
     heic: 'image/heic',
+    m4a: 'audio/mp4',
+    mp4a: 'audio/mp4',
+    aac: 'audio/aac',
+    mp3: 'audio/mpeg',
   };
   return map[ext ?? ''] ?? 'application/octet-stream';
 }
@@ -86,12 +91,13 @@ export function storageInfo(): StorageInfo | null {
 
 /** Copies into app storage first (instantly offline), records the attachment, then queues upload. */
 export async function addLocalFile(
-  owner: { type: 'assignment' | 'exam'; id: string },
+  owner: { type: FileOwnerType; id: string },
   src: { uri: string; name: string; mime?: string | null; size?: number | null },
+  presetId?: string,
 ): Promise<FileAttachment> {
   const mime = guessMime(src.name, src.mime);
   if (!(ALLOWED_MIME as readonly string[]).includes(mime)) throw new Error('That file type isn’t supported.');
-  const id = newId();
+  const id = presetId ?? newId();
   const dir = `${FILES_DIR}${id}/`;
   await FS.makeDirectoryAsync(dir, { intermediates: true });
   const dest = `${dir}${safeName(src.name)}`;
@@ -120,7 +126,7 @@ export async function addLocalFile(
   return rec;
 }
 
-export async function pickFiles(owner: { type: 'assignment' | 'exam'; id: string }): Promise<FileAttachment[]> {
+export async function pickFiles(owner: { type: FileOwnerType; id: string }): Promise<FileAttachment[]> {
   const res = await DocumentPicker.getDocumentAsync({ type: ACCEPTED_TYPES, multiple: true, copyToCacheDirectory: true });
   if (res.canceled) return [];
   const out: FileAttachment[] = [];
@@ -146,7 +152,7 @@ export async function scanToPdfFile(): Promise<{ uri: string; name: string; mime
   return { uri: tmp, name: `Scan ${formatShortDate(Date.now(), currentTz())}.pdf`, mime: 'application/pdf' };
 }
 
-export async function scanToPdf(owner: { type: 'assignment' | 'exam'; id: string }): Promise<FileAttachment | null> {
+export async function scanToPdf(owner: { type: FileOwnerType; id: string }): Promise<FileAttachment | null> {
   const f = await scanToPdfFile();
   if (!f) return null;
   const rec = await addLocalFile(owner, f);

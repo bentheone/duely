@@ -159,6 +159,7 @@ describe('reminders', () => {
     });
     expect(plan.map((n) => n.id)).toEqual([
       'classend-cs1',
+      'lecturelog-cs1',
       'due-a1-' + at(11, 7),
       'session-s1',
       'due-a1-' + at(13, 7),

@@ -1,6 +1,7 @@
 import { config } from '../config';
 import { Body, Controller, Get, NotFoundException, Patch } from '@nestjs/common';
 import { SettingsPatchSchema, SettingsSchema, type SettingsPatch, type User } from '@duely/shared';
+import { DEFAULT_SETTINGS } from '@duely/shared';
 import { CurrentUser, ZodPipe, type AuthedUser } from '../common/http';
 import { IntegrationAccountModel, UserModel, type UserDoc } from '../db/models';
 
@@ -48,7 +49,8 @@ export class MeController {
     const { activeSemesterId, timezone, ...rest } = patch;
     for (const [k, v] of Object.entries(rest)) {
       const key = k as keyof typeof s;
-      if (v && typeof v === 'object' && !Array.isArray(v)) Object.assign(s[key] as object, v);
+      if (v && typeof v === 'object' && !Array.isArray(v))
+        (s as Record<string, unknown>)[key] = { ...((s[key] as object | undefined) ?? (DEFAULT_SETTINGS[key] as object)), ...v };
       else (s as Record<string, unknown>)[key] = v;
     }
     const settings = SettingsSchema.parse(s);

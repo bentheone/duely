@@ -24,7 +24,7 @@ import { useCourses, useExam, useSessions } from '@/lib/db/queries';
 import { remove, save } from '@/lib/db/repo';
 import { api } from '@/lib/api';
 import { useApp, useSettings, useTz } from '@/lib/store';
-import { shareItem } from '@/lib/share';
+import { ShareSheet } from '@/features/ShareSheet';
 import { FONTS, useTheme } from '@/lib/theme';
 
 /** §11.3 #8 Exam: huge countdown, topics checklist, study sessions, Add study time (manual + hints). */
@@ -39,6 +39,7 @@ export default function ExamScreen() {
   const sessions = useSessions();
   const [topic, setTopic] = useState('');
   const [sheet, setSheet] = useState<null | 'menu' | 'type' | 'study'>(null);
+  const [shareOpen, setShareOpen] = useState(false);
   const now = Date.now();
   const study = useMemo(() => sessions.filter((s) => s.examId === id && s.status !== 'skipped'), [sessions, id]);
 
@@ -76,7 +77,7 @@ export default function ExamScreen() {
         <>
           <IconButton
             label="Share with a friend"
-            onPress={() => shareItem('exam', exam.id, `${EXAM_TYPE_LABELS[exam.type]}${course ? ` · ${course.shortName}` : ''}`).catch((e: Error) => Alert.alert('Couldn’t share', e.message))}
+            onPress={() => setShareOpen(true)}
           >
             <Share2 size={20} color={c.text} />
           </IconButton>
@@ -240,6 +241,7 @@ export default function ExamScreen() {
         <Gap h={16} />
         <SmallButton title="Done" tone="primary" onPress={() => setSheet(null)} />
       </Sheet>
+      <ShareSheet visible={shareOpen} onClose={() => setShareOpen(false)} kind="exam" id={exam.id} title={`${EXAM_TYPE_LABELS[exam.type]}${course ? ` · ${course.shortName}` : ''}`} courseCode={course?.code} />
     </Screen>
   );
 }

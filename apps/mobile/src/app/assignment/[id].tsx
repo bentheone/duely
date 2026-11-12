@@ -20,7 +20,7 @@ import { addSubtask, setStatus, toggleSubtask } from '@/features/actions';
 import { useAssignment, useCourses, useSessions, useSubtasks } from '@/lib/db/queries';
 import { remove, save } from '@/lib/db/repo';
 import { useTz } from '@/lib/store';
-import { shareItem } from '@/lib/share';
+import { ShareSheet } from '@/features/ShareSheet';
 import { FONTS, useTheme } from '@/lib/theme';
 
 type SheetKind = null | 'menu' | 'status' | 'grade' | 'progress';
@@ -35,6 +35,7 @@ export default function AssignmentScreen() {
   const sessions = useSessions();
   const { byId } = useCourses();
   const [sheet, setSheet] = useState<SheetKind>(null);
+  const [shareOpen, setShareOpen] = useState(false);
   const [newSub, setNewSub] = useState('');
   const [grade, setGrade] = useState('');
   const now = Date.now();
@@ -61,7 +62,7 @@ export default function AssignmentScreen() {
         <>
           <IconButton
             label="Share with a friend"
-            onPress={() => shareItem('assignment', a.id, a.title).catch((e: Error) => Alert.alert('Couldn’t share', e.message))}
+            onPress={() => setShareOpen(true)}
           >
             <Share2 size={20} color={c.text} />
           </IconButton>
@@ -288,6 +289,7 @@ export default function AssignmentScreen() {
         <Gap h={20} />
         <SmallButton title="Done" onPress={() => setSheet(null)} />
       </Sheet>
+      <ShareSheet visible={shareOpen} onClose={() => setShareOpen(false)} kind="assignment" id={a.id} title={a.title} courseCode={course?.code} />
     </Screen>
   );
 }

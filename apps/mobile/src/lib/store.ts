@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { create } from 'zustand';
 import { DEFAULT_SETTINGS, DEFAULT_TIMEZONE, type User, type UserSettings } from '@duely/shared';
 import { getMetaJson, setMetaJson, getMeta, setMeta } from './db/repo';
@@ -105,14 +106,17 @@ export const useApp = create<AppState>((set, get) => ({
   },
 }));
 
+const withDefaults = (s: Partial<UserSettings> | undefined): UserSettings => (s ? { ...DEFAULT_SETTINGS, ...s, lectures: s.lectures ?? DEFAULT_SETTINGS.lectures } : DEFAULT_SETTINGS);
+
 export function useSettings(): UserSettings {
-  return useApp((s) => s.user?.settings) ?? DEFAULT_SETTINGS;
+  const s = useApp((st) => st.user?.settings);
+  return useMemo(() => withDefaults(s), [s]);
 }
 export function useTz(): string {
   return useApp((s) => s.user?.timezone) ?? DEFAULT_TIMEZONE;
 }
 export function currentSettings(): UserSettings {
-  return useApp.getState().user?.settings ?? DEFAULT_SETTINGS;
+  return withDefaults(useApp.getState().user?.settings);
 }
 export function currentTz(): string {
   return useApp.getState().user?.timezone ?? DEFAULT_TIMEZONE;

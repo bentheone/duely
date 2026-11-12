@@ -3,7 +3,8 @@ import { Alert, Switch, View } from 'react-native';
 import { router } from 'expo-router';
 import { UpdateRow } from '@/components/UpdateRow';
 import { useQuery } from '@tanstack/react-query';
-import { WEEKDAY_LONG, formatHHMM, parseHHMM, zonedTime, type UserSettings } from '@duely/shared';
+import { DEFAULT_SETTINGS, WEEKDAY_LONG, formatHHMM, parseHHMM, zonedTime, type UserSettings } from '@duely/shared';
+import { refreshDerived } from '@/lib/derived';
 import { FieldRow, Gap, OptionList, Screen, Sheet, SmallButton, T } from '@/components/ui';
 import { pickTime } from '@/components/pickers';
 import { AlarmCheck, PermissionRows } from '@/features/Permissions';
@@ -34,6 +35,7 @@ export default function Settings() {
   const { c } = useTheme();
   const tz = useTz();
   const s = useSettings();
+  const lec = s.lectures ?? DEFAULT_SETTINGS.lectures;
   const user = useApp((st) => st.user);
   const googleConnected = useApp((st) => st.googleConnected);
   const lastSyncedAt = useApp((st) => st.lastSyncedAt);
@@ -46,6 +48,7 @@ export default function Settings() {
     update(p);
     void syncNow();
     if (p.alarm) void applyAlarms();
+    if (p.lectures || p.reminders || p.missedCheck) refreshDerived(300);
   };
   const timeRow = (label: string, value: string, set: (v: string) => void) => (
     <FieldRow
@@ -120,6 +123,21 @@ export default function Settings() {
         <Gap h={8} />
         <PermissionRows />
         <AlarmCheck />
+      </Group>
+
+      <Group title="Lectures">
+        {toggle('Remind me to log', lec.logReminder, (v) => patch({ lectures: { ...lec, logReminder: v } }))}
+        {toggle('Recap before class', lec.recapReminder, (v) => patch({ lectures: { ...lec, recapReminder: v } }))}
+        {lec.recapReminder ? (
+          <FieldRow
+            label="Recap"
+            value={`${lec.recapLeadMinutes} min before`}
+            onPress={() => {
+              const opts = [10, 20, 30, 60];
+              patch({ lectures: { ...lec, recapLeadMinutes: opts[(opts.indexOf(lec.recapLeadMinutes) + 1) % opts.length]! } });
+            }}
+          />
+        ) : null}
       </Group>
 
       <Group title="Reminders">

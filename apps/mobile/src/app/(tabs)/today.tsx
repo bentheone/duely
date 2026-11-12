@@ -41,6 +41,7 @@ export default function Today() {
       onRefresh={() => syncNow({ forceGoogle: true })}
       onOpen={(href) => router.push(href as never)}
       onAvatar={() => router.push('/courses')}
+      onCalendar={() => router.push('/calendar')}
       onAdd={(courseId, classSessionId) => router.push({ pathname: '/quick-add', params: { courseId, classSessionId } })}
       onNo={(courseId, classSessionId) => logMissed(courseId, 'none', classSessionId)}
     />

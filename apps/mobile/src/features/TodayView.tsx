@@ -1,6 +1,7 @@
 import React from 'react';
 import { Image, Pressable, View } from 'react-native';
 import { MONTH_SHORT, WEEKDAY_LONG, formatHHMM, zonedParts, type Course } from '@duely/shared';
+import { CalendarDays } from 'lucide-react-native';
 import { Card, CourseLabel, Gap, IconButton, Screen, SmallButton, T } from '@/components/ui';
 import { useTheme } from '@/lib/theme';
 import type { TodayItem } from './today';
@@ -17,6 +18,7 @@ export interface TodayViewProps {
   onRefresh?: () => unknown;
   onOpen: (href: string) => void;
   onAvatar: () => void;
+  onCalendar: () => void;
   onAdd: (courseId: string, classSessionId: string) => void;
   onNo: (courseId: string, classSessionId: string) => void;
 }
@@ -36,6 +38,10 @@ export function TodayView(p: TodayViewProps) {
             {d.day} {MONTH_SHORT[d.month - 1]}
           </T>
         </View>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+        <IconButton label="Calendar" onPress={p.onCalendar}>
+          <CalendarDays size={20} color={c.text} />
+        </IconButton>
         <IconButton label="Courses and settings" onPress={p.onAvatar}>
           {p.avatarUrl ? (
             <Image source={{ uri: p.avatarUrl }} style={{ width: 44, height: 44, borderRadius: 22 }} />
@@ -43,6 +49,7 @@ export function TodayView(p: TodayViewProps) {
             <T v="item">{p.initial ?? '·'}</T>
           )}
         </IconButton>
+        </View>
       </View>
       {p.status ? (
         <T v="small" tone="faint" style={{ marginTop: 8 }}>

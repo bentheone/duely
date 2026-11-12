@@ -78,6 +78,7 @@ export async function applyNotificationPlan(): Promise<void> {
     sessions: snap.sessions,
     classSessions: snap.classSessions,
     answeredClassSessionIds: answered,
+    lectures: snap.lectures,
   }).slice(0, 400); // stay well under OS limits
   const wanted = new Map(plan.map((p) => [p.id, p]));
   const scheduled = await Notifications.getAllScheduledNotificationsAsync();

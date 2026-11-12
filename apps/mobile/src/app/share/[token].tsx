@@ -31,7 +31,7 @@ export default function SharedScreen() {
   const matched = useMemo(() => (item ? matchCourse(item, active) : null), [item, active]);
   const courseId = choice ?? matched?.id ?? NEW;
 
-  const open = (s: { kind: string; id: string }) => router.replace(s.kind === 'exam' ? `/exam/${s.id}` : `/assignment/${s.id}`);
+  const open = (s: { kind: string; id: string }) => router.replace(s.kind === 'exam' ? `/exam/${s.id}` : s.kind === 'lecture' ? `/lecture/${s.id}` : `/assignment/${s.id}`);
 
   if (!signedIn || !onboarded) {
     return (
@@ -64,7 +64,10 @@ export default function SharedScreen() {
 
   const a = item.assignment;
   const e = item.exam;
-  const meta = a
+  const lec = item.lecture;
+  const meta = lec
+    ? [formatShortDate(lec.at, tz), lec.topics.length ? `${lec.topics.length} topics` : null, lec.blocks.length ? `${lec.blocks.length} notes` : null]
+    : a
     ? [
         a.dueAt != null ? `Due ${formatDue(a.dueAt, Date.now(), tz)}` : 'No due date',
         a.kind === 'group' ? `Group · ${a.group?.members.length ?? 0}` : null,
@@ -97,9 +100,15 @@ export default function SharedScreen() {
         From {item.from.name}
       </T>
       <Gap h={12} />
-      <CourseLabel color={item.course.color} name={item.course.shortName} suffix={e ? EXAM_TYPE_LABELS[e.type] : a?.kind === 'group' ? 'Group' : undefined} />
+      <CourseLabel color={item.course.color} name={item.course.shortName} suffix={e ? EXAM_TYPE_LABELS[e.type] : lec ? 'Lecture' : a?.kind === 'group' ? 'Group' : undefined} />
       <Gap h={10} />
-      <T v="title">{a?.title ?? (e ? EXAM_TYPE_LABELS[e.type] : '')}</T>
+      <T v="title">{a?.title ?? (e ? EXAM_TYPE_LABELS[e.type] : (lec?.title || lec?.topics[0] || 'Lecture notes'))}</T>
+      {lec?.topics.length ? (
+        <>
+          <Gap h={8} />
+          <T tone="muted">{lec.topics.join(' · ')}</T>
+        </>
+      ) : null}
       <Gap h={8} />
       <T tone="muted">{meta.filter(Boolean).join(' · ')}</T>
       {a?.notes || e?.notes ? (

@@ -6,6 +6,9 @@ import type {
   ExamSchema,
   FileAttachmentSchema,
   GroupInfoSchema,
+  ClassSlotSchema,
+  LectureBlockSchema,
+  LectureSchema,
   MissedCheckLogSchema,
   SemesterSchema,
   SessionSchema,
@@ -27,6 +30,10 @@ export type Exam = z.infer<typeof ExamSchema>;
 export type Session = z.infer<typeof SessionSchema>;
 export type FileAttachment = z.infer<typeof FileAttachmentSchema>;
 export type MissedCheckLog = z.infer<typeof MissedCheckLogSchema>;
+export type ClassSlot = z.infer<typeof ClassSlotSchema>;
+export type LectureBlock = z.infer<typeof LectureBlockSchema>;
+export type LectureBlockType = LectureBlock['type'];
+export type Lecture = z.infer<typeof LectureSchema>;
 
 export interface TableRecordMap {
   semesters: Semester;
@@ -38,6 +45,7 @@ export interface TableRecordMap {
   sessions: Session;
   files: FileAttachment;
   missedChecks: MissedCheckLog;
+  lectures: Lecture;
 }
 export type AnyRecord = TableRecordMap[SyncTable];
 
@@ -122,7 +130,7 @@ export interface FeedbackItem {
 /** Error codes the API puts in `{ code }` so the app can react (not just show text). */
 export type ApiErrorCode = 'google_access_denied';
 
-export type ShareKind = 'assignment' | 'exam';
+export type ShareKind = 'assignment' | 'exam' | 'lecture' | 'session' | 'resource';
 
 /**
  * Snapshot of an assignment or exam someone shared (§ sharing). The recipient's app copies it into
@@ -158,6 +166,51 @@ export interface SharedItem {
     topics: { title: string }[];
     notes: string;
   };
+  lecture?: { title: string; at: number; topics: string[]; blocks: LectureBlock[] };
+  session?: { title: string; start: number; end: number; kind: 'work' | 'study' };
+  resource?: { title: string; url: string | null; note: string };
   /** Attachments the recipient can download (Cloudinary only; Drive files stay private). */
   files: { id: string; name: string; mime: string; size: number }[];
+}
+
+// ---- Course communities ----
+export interface CommunityCourse {
+  code: string;
+  shortName: string;
+  title: string;
+  color: string;
+}
+export interface CommunityMember {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+  role: 'owner' | 'member';
+}
+export interface Community {
+  id: string;
+  name: string;
+  course: CommunityCourse;
+  isOwner: boolean;
+  members: CommunityMember[];
+  inviteToken: string;
+  inviteUrl: string;
+  createdAt: number;
+  lastPostAt: number | null;
+}
+export interface CommunityInvite {
+  communityId: string;
+  name: string;
+  course: CommunityCourse;
+  memberCount: number;
+  ownerName: string;
+  alreadyMember: boolean;
+}
+export interface CommunityPost {
+  id: string;
+  communityId: string;
+  author: { id: string; name: string };
+  mine: boolean;
+  /** Snapshot of the shared thing; `token` is the post id. */
+  item: SharedItem;
+  createdAt: number;
 }

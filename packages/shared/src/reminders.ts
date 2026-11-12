@@ -1,9 +1,9 @@
-import { NOTIFICATION_HORIZON_DAYS, EXAM_TYPE_LABELS, type UserSettings } from './constants';
+import { DEFAULT_SETTINGS, NOTIFICATION_HORIZON_DAYS, EXAM_TYPE_LABELS, type UserSettings } from './constants';
 import { isAssignmentOpen } from './progress';
 import { DAY, MINUTE, formatHHMM, parseIsoDuration, zonedDayAt } from './time';
-import type { Assignment, ClassSession, Course, Exam, MissedCheckLog, Session } from './types';
+import type { Assignment, ClassSession, Course, Exam, Lecture, MissedCheckLog, Session } from './types';
 
-export type NotificationKind = 'due' | 'exam' | 'session' | 'classEnd';
+export type NotificationKind = 'due' | 'exam' | 'session' | 'classEnd' | 'lectureLog' | 'lectureRecap';
 
 export interface PlannedNotification {
   id: string;
@@ -24,7 +24,8 @@ export interface PlanInput {
   assignments: Pick<Assignment, 'id' | 'courseId' | 'title' | 'dueAt' | 'status' | 'reminderOffsets' | 'deletedAt'>[];
   exams: Pick<Exam, 'id' | 'courseId' | 'type' | 'startsAt' | 'room' | 'deletedAt'>[];
   sessions: Pick<Session, 'id' | 'title' | 'start' | 'status' | 'deletedAt'>[];
-  classSessions: Pick<ClassSession, 'id' | 'courseId' | 'end' | 'deletedAt'>[];
+  classSessions: (Pick<ClassSession, 'id' | 'courseId' | 'end' | 'deletedAt'> & Partial<Pick<ClassSession, 'start'>>)[];
+  lectures?: Pick<Lecture, 'id' | 'courseId' | 'classSessionId' | 'at' | 'title' | 'topics' | 'deletedAt'>[];
   /** Class-end prompts already answered (by classSessionId). */
   answeredClassSessionIds?: Set<string>;
 }
@@ -135,7 +136,46 @@ export function planNotifications(input: PlanInput): PlannedNotification[] {
       });
     }
   }
+  planLectureReminders(input, active, push);
   return out.sort((a, b) => a.at - b.at);
+}
+
+/** "Log the lecture" after class (unless logged) and "Recap last lecture" before the next class. */
+function planLectureReminders(input: PlanInput, active: Map<string, CourseLite>, push: (n: PlannedNotification) => void) {
+  const prefs = input.settings.lectures ?? DEFAULT_SETTINGS.lectures;
+  const lectures = (input.lectures ?? []).filter((l) => !l.deletedAt);
+  const logged = new Set(lectures.map((l) => l.classSessionId).filter(Boolean));
+  for (const cs of input.classSessions) {
+    if (cs.deletedAt) continue;
+    const c = active.get(cs.courseId);
+    if (!c) continue;
+    if (prefs.logReminder && !logged.has(cs.id)) {
+      push({
+        id: `lecturelog-${cs.id}`,
+        at: cs.end + 15 * MINUTE,
+        kind: 'lectureLog',
+        title: `Log today’s ${c.shortName} lecture`,
+        body: 'Main topics, notes, photos — a minute now saves an hour later.',
+        data: { url: `duely://lecture/new?courseId=${c.id}&classSessionId=${cs.id}` },
+      });
+    }
+    if (prefs.recapReminder && cs.start != null) {
+      const last = lectures
+        .filter((l) => l.courseId === cs.courseId && l.at < cs.start! - 30 * MINUTE)
+        .sort((a, b) => b.at - a.at)[0];
+      if (last) {
+        const topics = last.topics.length ? last.topics.slice(0, 3).join(' · ') : last.title || 'Your notes from last time';
+        push({
+          id: `lecturerecap-${cs.id}-${last.id}`,
+          at: cs.start - prefs.recapLeadMinutes * MINUTE,
+          kind: 'lectureRecap',
+          title: `Recap ${c.shortName} before class`,
+          body: topics,
+          data: { url: `duely://lecture/${last.id}?recap=1` },
+        });
+      }
+    }
+  }
 }
 
 /**

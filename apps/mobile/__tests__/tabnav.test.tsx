@@ -24,6 +24,7 @@ jest.mock('@/lib/db/queries', () => ({
   useClassSessions: () => [],
   useMissedChecks: () => [],
   useSubtasks: () => [],
+  useLectures: () => [],
 }));
 jest.mock('@/lib/sync/engine', () => ({ syncNow: jest.fn(() => Promise.resolve()) }));
 jest.mock('@/lib/api', () => ({ api: jest.fn(() => Promise.resolve({ suggestions: [], busy: [] })) }));
@@ -39,7 +40,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import TabsLayout from '@/app/(tabs)/_layout';
 import Today from '@/app/(tabs)/today';
 import Assignments from '@/app/(tabs)/assignments';
-import Calendar from '@/app/(tabs)/calendar';
+import Calendar from '@/app/calendar';
+import Lectures from '@/app/(tabs)/lectures';
 import Exams from '@/app/(tabs)/exams';
 
 const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
@@ -61,7 +63,8 @@ test('switching between all bottom-nav tabs keeps the app alive', async () => {
       '(tabs)/_layout': TabsLayout,
       '(tabs)/today': Today,
       '(tabs)/assignments': Assignments,
-      '(tabs)/calendar': Calendar,
+      '(tabs)/lectures': Lectures,
+      calendar: Calendar,
       '(tabs)/exams': Exams,
       'quick-add': () => null,
     },
@@ -70,7 +73,7 @@ test('switching between all bottom-nav tabs keeps the app alive', async () => {
   expect(screen.getByText('Nothing today.')).toBeTruthy();
   for (const [label, text] of [
     ['Assignments', 'Nothing due'],
-    ['Calendar', null],
+    ['Lectures', 'No lectures yet'],
     ['Exams', 'No exams coming up'],
     ['Today', 'Nothing today.'],
     ['Exams', 'No exams coming up'],

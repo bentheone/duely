@@ -496,3 +496,108 @@ describe('shares', () => {
     expect(page.text).not.toContain(asg.title);
   });
 });
+
+const ALL_TABLES = 'semesters,courses,classSessions,assignments,subtasks,exams,sessions,files,missedChecks,lectures';
+
+describe('course schedules, lectures', () => {
+  test('weekly class times become duely class sessions; clearing the schedule removes future ones', async () => {
+    const t = await ctx.signIn('sched-1');
+    const auth = { Authorization: `Bearer ${t.accessToken}` };
+    const sem = semester();
+    const cid = uuidv7();
+    const slots = [{ weekday: 2, start: '10:00', end: '12:00', room: 'GB6' }];
+    await ctx.http().post('/sync/push').set(auth).send({ changes: [{ table: 'semesters', record: sem }, { table: 'courses', record: course(cid, sem.id, Date.now(), { schedule: slots }) }] }).expect(200);
+    const pull = await ctx.http().get(`/sync/pull?since=0&tables=${ALL_TABLES}`).set(auth).expect(200);
+    const classes = pull.body.changes.filter((c: { table: string }) => c.table === 'classSessions').map((c: { record: Record<string, unknown> }) => c.record);
+    // Fall 2026 ends 20 Dec; every remaining Tuesday gets a class.
+    const tuesdaysLeft = Math.floor((Date.UTC(2026, 11, 20) - Date.now()) / (7 * 86400000));
+    if (Date.now() < Date.UTC(2026, 11, 20)) expect(classes.length).toBeGreaterThanOrEqual(tuesdaysLeft);
+    for (const c of classes) expect(c).toMatchObject({ courseId: cid, sourceCalendarId: 'duely', room: 'GB6' });
+
+    await ctx.http().post('/sync/push').set(auth).send({ changes: [{ table: 'courses', record: course(cid, sem.id, Date.now() + 1000, { schedule: [] }) }] }).expect(200);
+    const after = await ctx.http().get(`/sync/pull?since=${pull.body.maxRev}&tables=${ALL_TABLES}`).set(auth).expect(200);
+    const deleted = after.body.changes.filter((c: { table: string; record: { deletedAt: number | null } }) => c.table === 'classSessions' && c.record.deletedAt);
+    expect(deleted.length).toBe(classes.length);
+  });
+
+  test('lectures sync; apps that do not send ?tables= never receive them', async () => {
+    const t = await ctx.signIn('lect-1');
+    const auth = { Authorization: `Bearer ${t.accessToken}` };
+    const sem = semester();
+    const cid = uuidv7();
+    const lecture = {
+      ...base(uuidv7()),
+      courseId: cid,
+      semesterId: sem.id,
+      classSessionId: null,
+      at: Date.now(),
+      title: 'Cursors',
+      topics: ['Explicit cursors', 'FOR loops'],
+      blocks: [
+        { id: uuidv7(), type: 'h1', text: 'Cursors' },
+        { id: uuidv7(), type: 'research', text: 'Read about REF cursors', done: false },
+      ],
+    };
+    const push = await ctx.http().post('/sync/push').set(auth).send({ changes: [{ table: 'semesters', record: sem }, { table: 'courses', record: course(cid, sem.id) }, { table: 'lectures', record: lecture }] }).expect(200);
+    expect(push.body.accepted).toContain(lecture.id);
+    const legacy = await ctx.http().get('/sync/pull?since=0').set(auth).expect(200);
+    expect(legacy.body.changes.some((c: { table: string }) => c.table === 'lectures')).toBe(false);
+    const modern = await ctx.http().get(`/sync/pull?since=0&tables=${ALL_TABLES}`).set(auth).expect(200);
+    expect(modern.body.changes.find((c: { table: string }) => c.table === 'lectures').record).toMatchObject({ title: 'Cursors', topics: ['Explicit cursors', 'FOR loops'] });
+  });
+});
+
+describe('communities', () => {
+  test('create, invite, join, post, list, permissions', async () => {
+    const a = await ctx.signIn('com-a', 'cara@example.com');
+    const b = await ctx.signIn('com-b', 'dan@example.com');
+    const c = await ctx.signIn('com-c', 'eve@example.com');
+    const A = { Authorization: `Bearer ${a.accessToken}` };
+    const B = { Authorization: `Bearer ${b.accessToken}` };
+    const C = { Authorization: `Bearer ${c.accessToken}` };
+
+    const created = await ctx.http().post('/communities').set(A).send({ name: 'PL/SQL crew', course: { code: 'INSY 8311', shortName: 'PL/SQL', title: 'Database Programming', color: '#EA580C' } }).expect(201);
+    const com = created.body;
+    expect(com).toMatchObject({ isOwner: true, name: 'PL/SQL crew' });
+    expect(com.inviteUrl).toContain(`/c/${com.inviteToken}`);
+
+    const inv = await ctx.http().get(`/communities/invite/${com.inviteToken}`).set(B).expect(200);
+    expect(inv.body).toMatchObject({ communityId: com.id, memberCount: 1, alreadyMember: false, course: { code: 'INSY 8311' } });
+    await ctx.http().get(`/communities/${com.id}`).set(B).expect(404);
+    const joined = await ctx.http().post('/communities/join').set(B).send({ token: com.inviteToken }).expect(200);
+    expect(joined.body.members).toHaveLength(2);
+    await ctx.http().post('/communities/join').set(B).send({ token: com.inviteToken }).expect(200); // idempotent
+
+    // A posts one of their assignments; the snapshot is taken from A's data.
+    const sem = semester();
+    const cid = uuidv7();
+    const asg = assignment(uuidv7(), cid, sem.id);
+    await ctx.http().post('/sync/push').set(A).send({ changes: [{ table: 'semesters', record: sem }, { table: 'courses', record: course(cid, sem.id) }, { table: 'assignments', record: asg }] }).expect(200);
+    await ctx.http().post(`/communities/${com.id}/posts`).set(A).send({ kind: 'assignment', id: asg.id }).expect(201);
+    // B can't post A's item (scoped by userId) but can post a resource.
+    await ctx.http().post(`/communities/${com.id}/posts`).set(B).send({ kind: 'assignment', id: asg.id }).expect(404);
+    await ctx.http().post(`/communities/${com.id}/posts`).set(B).send({ kind: 'resource', title: 'Past paper', url: 'https://example.com/p.pdf' }).expect(201);
+
+    const posts = await ctx.http().get(`/communities/${com.id}/posts`).set(B).expect(200);
+    expect(posts.body).toHaveLength(2);
+    expect(posts.body[1]).toMatchObject({ mine: false, item: { kind: 'assignment', assignment: { title: asg.title }, course: { code: 'INSY 8311' } } });
+    expect(posts.body[0]).toMatchObject({ mine: true, item: { kind: 'resource', resource: { title: 'Past paper' } } });
+
+    // Outsiders see nothing; only author/owner can delete.
+    await ctx.http().get(`/communities/${com.id}/posts`).set(C).expect(404);
+    await ctx.http().delete(`/communities/${com.id}/posts/${posts.body[1].id}`).set(B).expect(403);
+    await ctx.http().delete(`/communities/${com.id}/posts/${posts.body[0].id}`).set(A).expect(204);
+
+    // Reset invite → old token dead; landing page is public.
+    const reset = await ctx.http().post(`/communities/${com.id}/invite/reset`).set(A).expect(200);
+    await ctx.http().post('/communities/join').set(C).send({ token: com.inviteToken }).expect(404);
+    const page = await ctx.http().get(`/c/${reset.body.inviteToken}`).expect(200);
+    expect(page.text).toContain(`duely://community/join/${reset.body.inviteToken}`);
+
+    // Owner leaves → B becomes owner.
+    await ctx.http().post(`/communities/${com.id}/leave`).set(A).expect(204);
+    const now = await ctx.http().get(`/communities/${com.id}`).set(B).expect(200);
+    expect(now.body).toMatchObject({ isOwner: true });
+    expect(now.body.members).toHaveLength(1);
+  });
+});

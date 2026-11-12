@@ -6,6 +6,7 @@ import {
   type Assignment,
   type Course,
   type Exam,
+  type Lecture,
   type Semester,
   type Session,
   type Subtask,
@@ -184,6 +185,21 @@ export function createExam(p: Partial<Exam> & { courseId: string; startsAt: numb
     room: null,
     topics: [],
     notes: '',
+    ...p,
+    semesterId: course?.semesterId ?? ensureSemester().id,
+  });
+}
+
+// ---------- lectures ----------
+
+export function createLecture(p: Partial<Lecture> & { courseId: string; at: number }): Lecture {
+  const course = getRecord('courses', p.courseId);
+  return save('lectures', {
+    classSessionId: null,
+    title: '',
+    topics: [],
+    blocks: [],
+    recappedAt: null,
     ...p,
     semesterId: course?.semesterId ?? ensureSemester().id,
   });

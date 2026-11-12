@@ -9,14 +9,19 @@ import {
   type SyncTable,
 } from '@duely/shared';
 import { SERVER_MANAGED_FIELDS, TABLE_MODELS, currentRev, reserveRevs, toRecord } from '../db/models';
+import { rebuildScheduledClasses } from './schedule';
 
 const PULL_PAGE = 500;
+/** Tables app versions before `?tables=` existed can store (they crash on unknown ones). */
+const LEGACY_TABLES: SyncTable[] = ['semesters', 'courses', 'classSessions', 'assignments', 'subtasks', 'exams', 'sessions', 'files', 'missedChecks'];
 
 /** §6 offline-first sync: last-write-wins on updatedAt, per-user monotonically increasing rev. */
 @Injectable()
 export class SyncService {
   async push(userId: string, changes: { table: string; record: Record<string, unknown> }[]): Promise<PushResponse> {
     const res: PushResponse = { accepted: [], conflicts: [], rejected: [] };
+    const touchedCourses = new Set<string>();
+    const touchedSemesters = new Set<string>();
     for (const ch of changes) {
       const id = typeof ch.record.id === 'string' ? ch.record.id : '?';
       if (!(SYNC_TABLES as readonly string[]).includes(ch.table)) {
@@ -59,17 +64,21 @@ export class SyncService {
           { upsert: true },
         );
         res.accepted.push(incoming.id);
+        if (table === 'courses') touchedCourses.add(incoming.id);
+        if (table === 'semesters') touchedSemesters.add(incoming.id);
       } catch (e) {
         // Duplicate key → the id exists for another user (race) — never overwrite.
         res.rejected.push({ id, reason: (e as { code?: number }).code === 11000 ? 'id conflict' : 'write failed' });
       }
     }
+    if (touchedCourses.size || touchedSemesters.size) await rebuildScheduledClasses(userId, [...touchedCourses], [...touchedSemesters]);
     return res;
   }
 
-  async pull(userId: string, since: number): Promise<PullResponse> {
+  async pull(userId: string, since: number, known?: string[]): Promise<PullResponse> {
+    const tables = known?.length ? SYNC_TABLES.filter((t) => known.includes(t)) : LEGACY_TABLES;
     const batches = await Promise.all(
-      SYNC_TABLES.map(async (table) => {
+      tables.map(async (table) => {
         const rows = await TABLE_MODELS[table]
           .find({ userId, rev: { $gt: since } })
           .sort({ rev: 1 })

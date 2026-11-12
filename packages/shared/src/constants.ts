@@ -34,6 +34,7 @@ export const DEFAULT_SETTINGS = {
   },
   workHours: { start: '07:00', end: '22:00' },
   sessionDefaultMinutes: 90,
+  lectures: { logReminder: true, recapReminder: true, recapLeadMinutes: 20 },
 };
 
 export type UserSettings = typeof DEFAULT_SETTINGS;
@@ -49,6 +50,7 @@ export const SYNC_TABLES = [
   'sessions',
   'files',
   'missedChecks',
+  'lectures',
 ] as const;
 export type SyncTable = (typeof SYNC_TABLES)[number];
 export const CLIENT_WRITABLE_TABLES: readonly SyncTable[] = SYNC_TABLES.filter(
@@ -69,6 +71,12 @@ export const ALLOWED_MIME = [
   'image/png',
   'image/heic',
   'image/webp',
+  // Voice notes (expo-audio records AAC in an MP4/M4A container on Android).
+  'audio/mp4',
+  'audio/m4a',
+  'audio/x-m4a',
+  'audio/aac',
+  'audio/mpeg',
 ] as const;
 
 export const SUBMISSION_LABELS = {

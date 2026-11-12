@@ -4,7 +4,11 @@ import { PushBodySchema } from '@duely/shared';
 import { CurrentUser, ZodPipe, type AuthedUser } from '../common/http';
 import { SyncService } from './sync.service';
 
-const PullQuery = z.object({ since: z.coerce.number().int().nonnegative().default(0) });
+const PullQuery = z.object({
+  since: z.coerce.number().int().nonnegative().default(0),
+  /** Tables this app version knows (comma list). Older apps omit it and get the original nine. */
+  tables: z.string().max(400).optional(),
+});
 
 @Controller('sync')
 export class SyncController {
@@ -18,6 +22,6 @@ export class SyncController {
 
   @Get('pull')
   pull(@CurrentUser() u: AuthedUser, @Query(new ZodPipe(PullQuery)) q: z.infer<typeof PullQuery>) {
-    return this.sync.pull(u.userId, q.since);
+    return this.sync.pull(u.userId, q.since, q.tables?.split(',').filter(Boolean));
   }
 }

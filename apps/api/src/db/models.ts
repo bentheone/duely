@@ -253,6 +253,8 @@ export const CourseModel = model(
     semesterId: String, code: String, title: String, shortName: String, color: String,
     lecturer: String, room: String, group: String, status: String, finishedAt: Number,
     matchRules: [String],
+    schedule: Mixed, scheduleToGoogle: Boolean, scheduleRev: Number,
+    scheduleGoogleEventIds: [String], scheduleGoogleHash: String,
   }),
 );
 const classSessionSchema = syncSchema({
@@ -302,6 +304,14 @@ export const MissedCheckLogModel = model(
   syncSchema({ courseId: String, classSessionId: String, answer: String, at: Number }),
 );
 
+export const LectureModel = model(
+  'Lecture',
+  syncSchema({
+    courseId: String, semesterId: String, classSessionId: String, at: Number, title: String,
+    topics: [String], blocks: Mixed, recappedAt: Number,
+  }),
+);
+
 export const TABLE_MODELS: Record<SyncTable, Model<Record<string, unknown>>> = {
   semesters: SemesterModel,
   courses: CourseModel,
@@ -312,10 +322,12 @@ export const TABLE_MODELS: Record<SyncTable, Model<Record<string, unknown>>> = {
   sessions: SessionModel,
   files: FileAttachmentModel,
   missedChecks: MissedCheckLogModel,
+  lectures: LectureModel,
 };
 
 /** Server-managed link fields that a stale client push must not clear. */
 export const SERVER_MANAGED_FIELDS: Partial<Record<SyncTable, string[]>> = {
+  courses: ['scheduleGoogleEventIds', 'scheduleGoogleHash'],
   assignments: ['googleTaskId'],
   subtasks: ['googleTaskId'],
   sessions: ['googleEventId'],
@@ -368,7 +380,7 @@ export async function serverInsert(
 export interface ShareDoc {
   _id: string; // random token
   userId: string;
-  kind: 'assignment' | 'exam';
+  kind: 'assignment' | 'exam' | 'lecture';
   itemId: string;
   payload: Record<string, unknown>;
   opens: number;
@@ -393,3 +405,60 @@ const shareSchema = new Schema<ShareDoc>(
 );
 shareSchema.index({ userId: 1, kind: 1, itemId: 1 });
 export const ShareModel = model<ShareDoc>('Share', shareSchema);
+
+// ---- Course communities ----
+export interface CommunityDoc {
+  _id: string;
+  name: string;
+  course: { code: string; shortName: string; title: string; color: string };
+  ownerId: string;
+  members: { userId: string; role: 'owner' | 'member'; joinedAt: number }[];
+  inviteToken: string;
+  createdAt: number;
+  updatedAt: number;
+  lastPostAt?: number | null;
+  deletedAt?: number | null;
+}
+const communitySchema = new Schema<CommunityDoc>(
+  {
+    _id: { type: String, required: true },
+    name: { type: String, required: true },
+    course: { type: Mixed, required: true },
+    ownerId: { type: String, required: true },
+    members: { type: [{ userId: String, role: String, joinedAt: Number, _id: false }], default: [] },
+    inviteToken: { type: String, required: true, unique: true },
+    createdAt: Number,
+    updatedAt: Number,
+    lastPostAt: { type: Number, default: null },
+    deletedAt: { type: Number, default: null },
+  },
+  { versionKey: false, minimize: false },
+);
+communitySchema.index({ 'members.userId': 1 });
+export const CommunityModel = model<CommunityDoc>('Community', communitySchema);
+
+export interface CommunityPostDoc {
+  _id: string;
+  communityId: string;
+  authorId: string;
+  kind: string;
+  itemId?: string | null;
+  payload: Record<string, unknown>;
+  createdAt: number;
+  deletedAt?: number | null;
+}
+const postSchema = new Schema<CommunityPostDoc>(
+  {
+    _id: { type: String, required: true },
+    communityId: { type: String, required: true },
+    authorId: { type: String, required: true },
+    kind: { type: String, required: true },
+    itemId: { type: String, default: null },
+    payload: { type: Mixed, required: true },
+    createdAt: Number,
+    deletedAt: { type: Number, default: null },
+  },
+  { versionKey: false, minimize: false },
+);
+postSchema.index({ communityId: 1, createdAt: -1 });
+export const CommunityPostModel = model<CommunityPostDoc>('CommunityPost', postSchema);

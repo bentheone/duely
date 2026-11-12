@@ -14,7 +14,7 @@ function ext(name: string) {
 }
 
 /** File tiles (ext label + name; tap = Open with…) with a subtle upload-state dot (§9.2). */
-export function FileTiles({ ownerType, ownerId }: { ownerType: 'assignment' | 'exam'; ownerId: string }) {
+export function FileTiles({ ownerType, ownerId }: { ownerType: 'assignment' | 'exam' | 'lecture'; ownerId: string }) {
   const { c } = useTheme();
   const files = useFiles(ownerType, ownerId);
   const uploads = useApp((s) => s.uploads);

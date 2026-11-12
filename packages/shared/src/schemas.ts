@@ -34,6 +34,14 @@ export const SettingsSchema = z.object({
   }),
   workHours: z.object({ start: hhmm, end: hhmm }),
   sessionDefaultMinutes: z.number().int().min(15).max(480),
+  /** Optional: users created before lectures existed don't have it (defaults fill in). */
+  lectures: z
+    .object({
+      logReminder: z.boolean(),
+      recapReminder: z.boolean(),
+      recapLeadMinutes: z.number().int().min(0).max(240),
+    })
+    .optional(),
 });
 export const SettingsPatchSchema = z
   .object({
@@ -43,6 +51,7 @@ export const SettingsPatchSchema = z
     missedCheck: SettingsSchema.shape.missedCheck.partial(),
     workHours: SettingsSchema.shape.workHours.partial(),
     sessionDefaultMinutes: SettingsSchema.shape.sessionDefaultMinutes,
+    lectures: SettingsSchema.shape.lectures.unwrap().partial(),
     activeSemesterId: z.string().nullable(),
     timezone: z.string(),
   })
@@ -69,6 +78,13 @@ export const SemesterSchema = z.object({
   status: z.enum(['active', 'archived']),
 });
 
+export const ClassSlotSchema = z.object({
+  weekday: z.number().int().min(0).max(6), // 0 = Sunday
+  start: hhmm,
+  end: hhmm,
+  room: z.string().max(60).nullable().optional(),
+});
+
 export const CourseSchema = z.object({
   ...baseFields,
   semesterId: id,
@@ -82,6 +98,15 @@ export const CourseSchema = z.object({
   status: z.enum(['active', 'finished']),
   finishedAt: ms.nullable().optional(),
   matchRules: z.array(z.string().max(80)).max(50),
+  /** Weekly class times entered in Duely (the server turns them into class sessions). */
+  schedule: z.array(ClassSlotSchema).max(14).nullable().optional(),
+  /** Also put those class times on the user's Google Calendar ("Duely" calendar). */
+  scheduleToGoogle: z.boolean().nullable().optional(),
+  /** Bumped by "Resync calendar" to force the Google copy to be rebuilt. */
+  scheduleRev: z.number().int().nonnegative().nullable().optional(),
+  /** Server-managed: Google recurring event ids for the schedule + hash of what was written. */
+  scheduleGoogleEventIds: z.array(z.string()).nullable().optional(),
+  scheduleGoogleHash: z.string().nullable().optional(),
 });
 
 export const ClassSessionSchema = z.object({
@@ -169,7 +194,7 @@ export const SessionSchema = z.object({
 
 export const FileAttachmentSchema = z.object({
   ...baseFields,
-  ownerType: z.enum(['assignment', 'exam']),
+  ownerType: z.enum(['assignment', 'exam', 'lecture']),
   ownerId: id,
   name: z.string().min(1).max(255),
   mime: z.string().max(200),
@@ -188,6 +213,30 @@ export const MissedCheckLogSchema = z.object({
   at: ms,
 });
 
+export const LECTURE_BLOCK_TYPES = ['p', 'h1', 'h2', 'bullet', 'number', 'check', 'quote', 'research', 'image', 'file', 'audio'] as const;
+export const LectureBlockSchema = z.object({
+  id,
+  type: z.enum(LECTURE_BLOCK_TYPES),
+  text: z.string().max(20000),
+  done: z.boolean().nullable().optional(),
+  /** image / file / audio blocks point at a FileAttachment (ownerType 'lecture'). */
+  fileId: id.nullable().optional(),
+  indent: z.number().int().min(0).max(3).nullable().optional(),
+});
+
+/** One logged lecture: main topics + a block document (headings, lists, images, files, voice). */
+export const LectureSchema = z.object({
+  ...baseFields,
+  courseId: id,
+  semesterId: id,
+  classSessionId: id.nullable().optional(),
+  at: ms,
+  title: z.string().max(300),
+  topics: z.array(z.string().max(200)).max(50),
+  blocks: z.array(LectureBlockSchema).max(2000),
+  recappedAt: ms.nullable().optional(),
+});
+
 export const TABLE_SCHEMAS = {
   semesters: SemesterSchema,
   courses: CourseSchema,
@@ -198,6 +247,7 @@ export const TABLE_SCHEMAS = {
   sessions: SessionSchema,
   files: FileAttachmentSchema,
   missedChecks: MissedCheckLogSchema,
+  lectures: LectureSchema,
 } satisfies Record<SyncTable, z.ZodObject>;
 
 /** Schema the server accepts on push: userId/rev are assigned by the server. */
@@ -283,7 +333,29 @@ export const FeedbackBodySchema = z.object({
 export const FeedbackPatchSchema = z.object({ read: z.boolean() });
 
 // ---- Sharing an assignment / exam with a friend (opened in the app only) ----
-export const SHARE_KINDS = ['assignment', 'exam'] as const;
+export const SHARE_KINDS = ['assignment', 'exam', 'lecture'] as const;
 export const ShareCreateSchema = z.object({ kind: z.enum(SHARE_KINDS), id });
 /** Share tokens are random base64url strings. */
 export const ShareTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{8,40}$/);
+
+// ---- Course communities ----
+export const CommunityCourseSchema = z.object({
+  code: z.string().trim().min(2).max(40),
+  shortName: z.string().trim().min(1).max(24),
+  title: z.string().trim().max(200),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+});
+export const CommunityCreateSchema = z.object({ name: z.string().trim().min(2).max(80), course: CommunityCourseSchema });
+export const CommunityJoinSchema = z.object({ token: ShareTokenSchema });
+export const CommunityPostCreateSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('assignment'), id }),
+  z.object({ kind: z.literal('exam'), id }),
+  z.object({ kind: z.literal('lecture'), id }),
+  z.object({ kind: z.literal('session'), id }),
+  z.object({
+    kind: z.literal('resource'),
+    title: z.string().trim().min(1).max(200),
+    url: z.string().trim().url().max(2000).nullable().optional(),
+    note: z.string().max(4000).optional(),
+  }),
+]);

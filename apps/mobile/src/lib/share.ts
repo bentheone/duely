@@ -2,14 +2,14 @@ import * as FS from 'expo-file-system/legacy';
 import { Share } from 'react-native';
 import type { Course, SharedItem, ShareKind } from '@duely/shared';
 import { api } from './api';
-import { addLocalFile } from './files';
+import { addLocalFile, type FileOwnerType } from './files';
 import { getMetaJson, newId, save, setMetaJson } from './db/repo';
 import { useApp } from './store';
 import { pendingCount, syncNow } from './sync/engine';
-import { createAssignment, createExam, upsertCourse } from '@/features/actions';
+import { addManualSession, createAssignment, createExam, createLecture, upsertCourse } from '@/features/actions';
 
 /** Creates (or refreshes) the share link on the server and opens the system share sheet. */
-export async function shareItem(kind: ShareKind, id: string, title: string): Promise<void> {
+export async function shareItem(kind: 'assignment' | 'exam' | 'lecture', id: string, title: string): Promise<void> {
   if (!useApp.getState().online) throw new Error('Connect to the internet to share.');
   // The server snapshots its own copy, so send local edits first.
   if (pendingCount() > 0) await syncNow();
@@ -32,12 +32,23 @@ export function matchCourse(item: SharedItem, courses: Course[]): Course | null 
   );
 }
 
+/** Where a shared item's attachments are fetched from (friend link or community post). */
+export type FileSource = (fileId: string) => string;
+export const shareFiles = (token: string): FileSource => (fileId) => `/shares/${token}/files/${fileId}`;
+
 /**
  * Copies a shared item into my own data (local write → /sync, the one write path). `courseId` null =
  * create the sender's course for me. Attachments download + re-upload to my storage in the background.
+ * `metaKey` remembers the copy so the same link/post opens it instead of saving twice.
  */
-export function saveShared(item: SharedItem, courseId: string | null): { kind: ShareKind; id: string } {
+export function saveShared(
+  item: SharedItem,
+  courseId: string | null,
+  opts: { files?: FileSource; metaKey?: string } = {},
+): { kind: ShareKind; id: string } {
   const course = courseId ?? upsertCourse({ shortName: item.course.shortName.slice(0, 24) || 'Course', code: item.course.code, title: item.course.title, color: item.course.color }).id;
+  // New ids for copied attachments, decided up front so lecture blocks can point at them.
+  const fileIds = new Map(item.files.map((f) => [f.id, newId()]));
   let saved: { kind: ShareKind; id: string };
 
   if (item.kind === 'exam' && item.exam) {
@@ -52,8 +63,23 @@ export function saveShared(item: SharedItem, courseId: string | null): { kind: S
       topics: e.topics.map((t) => ({ id: newId(), title: t.title, done: false })),
     });
     saved = { kind: 'exam', id: exam.id };
-  } else {
-    const a = item.assignment!;
+  } else if (item.kind === 'lecture' && item.lecture) {
+    const l = item.lecture;
+    const lec = createLecture({
+      courseId: course,
+      at: l.at,
+      title: l.title,
+      topics: l.topics,
+      blocks: l.blocks.map((b) => ({ ...b, id: newId(), done: b.type === 'check' || b.type === 'research' ? false : b.done, fileId: b.fileId ? (fileIds.get(b.fileId) ?? null) : null })),
+    });
+    saved = { kind: 'lecture', id: lec.id };
+  } else if (item.kind === 'session' && item.session) {
+    const se = item.session;
+    const prefix = `${item.course.shortName} · `;
+    const s = addManualSession({ title: se.title.startsWith(prefix) ? se.title : `${prefix}${se.title}`, start: se.start, minutes: Math.max(15, Math.round((se.end - se.start) / 60_000)) });
+    saved = { kind: 'session', id: s.id };
+  } else if (item.assignment) {
+    const a = item.assignment;
     const me = (useApp.getState().user?.name ?? '').trim().toLowerCase();
     const myFirst = me.split(' ')[0];
     const group = a.group
@@ -77,19 +103,21 @@ export function saveShared(item: SharedItem, courseId: string | null): { kind: S
       marks: a.marks,
       group,
     });
-    a.subtasks.forEach((s, i) => save('subtasks', { assignmentId: asg.id, title: s.title, dueAt: s.dueAt, done: false, order: s.order || i + 1, googleTaskId: null }));
+    a.subtasks.forEach((st, i) => save('subtasks', { assignmentId: asg.id, title: st.title, dueAt: st.dueAt, done: false, order: st.order || i + 1, googleTaskId: null }));
     saved = { kind: 'assignment', id: asg.id };
+  } else {
+    throw new Error('Nothing to save here.');
   }
 
-  setMetaJson(`share:${item.token}`, saved);
-  void copyFiles(item, saved).catch(() => undefined);
+  setMetaJson(opts.metaKey ?? `share:${item.token}`, saved);
+  if (saved.kind !== 'session') void copyFiles(item, saved, fileIds, opts.files ?? shareFiles(item.token)).catch(() => undefined);
   return saved;
 }
 
-async function copyFiles(item: SharedItem, owner: { kind: ShareKind; id: string }): Promise<void> {
+async function copyFiles(item: SharedItem, owner: { kind: ShareKind; id: string }, ids: Map<string, string>, source: FileSource): Promise<void> {
   for (const f of item.files) {
     try {
-      const target = await api<{ url: string; headers: Record<string, string>; fallbackUrl?: string | null }>(`/shares/${item.token}/files/${f.id}`);
+      const target = await api<{ url: string; headers: Record<string, string>; fallbackUrl?: string | null }>(source(f.id));
       const tmp = `${FS.cacheDirectory}share-${newId()}`;
       let ok = false;
       for (const url of [target.url, target.fallbackUrl].filter((u): u is string => !!u)) {
@@ -99,7 +127,7 @@ async function copyFiles(item: SharedItem, owner: { kind: ShareKind; id: string 
           break;
         }
       }
-      if (ok) await addLocalFile({ type: owner.kind, id: owner.id }, { uri: tmp, name: f.name, mime: f.mime, size: f.size });
+      if (ok) await addLocalFile({ type: owner.kind as FileOwnerType, id: owner.id }, { uri: tmp, name: f.name, mime: f.mime, size: f.size }, ids.get(f.id));
       await FS.deleteAsync(tmp, { idempotent: true });
     } catch {
       // One missing file shouldn't stop the rest.

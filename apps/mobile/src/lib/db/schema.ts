@@ -1,5 +1,5 @@
 import { integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
-import type { GroupInfo, SyncTable } from '@duely/shared';
+import type { ClassSlot, GroupInfo, LectureBlock, SyncTable } from '@duely/shared';
 
 /** Local mirror of §5 (flattened JSON columns for nested values) + outbox/sync_meta/file_cache (§5.2). */
 const base = {
@@ -32,6 +32,11 @@ export const courses = sqliteTable('courses', {
   status: text('status', { enum: ['active', 'finished'] }).notNull(),
   finishedAt: integer('finishedAt'),
   matchRules: text('matchRules', { mode: 'json' }).$type<string[]>().notNull(),
+  schedule: text('schedule', { mode: 'json' }).$type<ClassSlot[] | null>(),
+  scheduleToGoogle: integer('scheduleToGoogle', { mode: 'boolean' }),
+  scheduleRev: integer('scheduleRev'),
+  scheduleGoogleEventIds: text('scheduleGoogleEventIds', { mode: 'json' }).$type<string[] | null>(),
+  scheduleGoogleHash: text('scheduleGoogleHash'),
 });
 
 export const classSessions = sqliteTable('classSessions', {
@@ -101,7 +106,7 @@ export const sessions = sqliteTable('sessions', {
 
 export const files = sqliteTable('files', {
   ...base,
-  ownerType: text('ownerType', { enum: ['assignment', 'exam'] }).notNull(),
+  ownerType: text('ownerType', { enum: ['assignment', 'exam', 'lecture'] }).notNull(),
   ownerId: text('ownerId').notNull(),
   name: text('name').notNull(),
   mime: text('mime').notNull(),
@@ -118,6 +123,18 @@ export const missedChecks = sqliteTable('missedChecks', {
   classSessionId: text('classSessionId'),
   answer: text('answer', { enum: ['added', 'none', 'later'] }).notNull(),
   at: integer('at').notNull(),
+});
+
+export const lectures = sqliteTable('lectures', {
+  ...base,
+  courseId: text('courseId').notNull(),
+  semesterId: text('semesterId').notNull(),
+  classSessionId: text('classSessionId'),
+  at: integer('at').notNull(),
+  title: text('title').notNull(),
+  topics: text('topics', { mode: 'json' }).$type<string[]>().notNull(),
+  blocks: text('blocks', { mode: 'json' }).$type<LectureBlock[]>().notNull(),
+  recappedAt: integer('recappedAt'),
 });
 
 export const outbox = sqliteTable('outbox', {
@@ -152,6 +169,7 @@ export const TABLES = {
   sessions,
   files,
   missedChecks,
+  lectures,
 } satisfies Record<SyncTable, unknown>;
 
 /** Hand-written DDL (kept in step with the Drizzle tables above). Bump DB_VERSION + add a migration on change. */
@@ -174,5 +192,15 @@ export const MIGRATIONS: string[][] = [
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_outbox_record ON outbox("table", recordId)`,
     `CREATE TABLE IF NOT EXISTS sync_meta (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)`,
     `CREATE TABLE IF NOT EXISTS file_cache (attachmentId TEXT PRIMARY KEY NOT NULL, localUri TEXT NOT NULL, safUri TEXT, downloadedAt INTEGER NOT NULL)`,
+  ],
+  // v2: lectures + course class times.
+  [
+    `ALTER TABLE courses ADD COLUMN schedule TEXT`,
+    `ALTER TABLE courses ADD COLUMN scheduleToGoogle INTEGER`,
+    `ALTER TABLE courses ADD COLUMN scheduleRev INTEGER`,
+    `ALTER TABLE courses ADD COLUMN scheduleGoogleEventIds TEXT`,
+    `ALTER TABLE courses ADD COLUMN scheduleGoogleHash TEXT`,
+    `CREATE TABLE IF NOT EXISTS lectures (${B}, courseId TEXT NOT NULL, semesterId TEXT NOT NULL, classSessionId TEXT, at INTEGER NOT NULL, title TEXT NOT NULL, topics TEXT NOT NULL, blocks TEXT NOT NULL, recappedAt INTEGER)`,
+    `CREATE INDEX IF NOT EXISTS idx_lecture_course ON lectures(courseId, at)`,
   ],
 ];

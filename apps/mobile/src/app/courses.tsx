@@ -2,11 +2,12 @@ import React, { useMemo, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 import { router } from 'expo-router';
 import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
-import { ChevronDown, ChevronRight, MessageSquare, Plus, Settings as Gear, ShieldCheck } from 'lucide-react-native';
+import { ChevronDown, ChevronRight, MessageSquare, Plus, Settings as Gear, ShieldCheck, Users } from 'lucide-react-native';
 import { WEEKDAY_SHORT, zonedParts } from '@duely/shared';
-import { Card, Dot, Gap, IconButton, Input, OptionList, PillButton, Screen, Sheet, SmallButton, T } from '@/components/ui';
+import { Card, Dot, Gap, IconButton, OptionList, Screen, Sheet, SmallButton, T } from '@/components/ui';
 import { useActiveSemester, useClassSessions, useCourses, useSemesters } from '@/lib/db/queries';
-import { archiveSemester, createSemester, defaultSemesterName, finishCourse } from '@/features/actions';
+import { archiveSemester, finishCourse } from '@/features/actions';
+import { SemesterEditor } from '@/features/SemesterEditor';
 import { useApp, useTz } from '@/lib/store';
 import { FONTS, useTheme } from '@/lib/theme';
 
@@ -20,7 +21,7 @@ export default function Courses() {
   const classes = useClassSessions();
   const [semSheet, setSemSheet] = useState(false);
   const isAdmin = useApp((st) => !!st.user?.isAdmin);
-  const [newSem, setNewSem] = useState<string | null>(null);
+  const [editSem, setEditSem] = useState<string | null>(null);
 
   const daysByCourse = useMemo(() => {
     const m = new Map<string, Set<number>>();
@@ -47,6 +48,9 @@ export default function Courses() {
               <ShieldCheck size={20} color={c.text} />
             </IconButton>
           ) : null}
+          <IconButton label="Communities" onPress={() => router.push('/communities')}>
+            <Users size={20} color={c.text} />
+          </IconButton>
           <IconButton label="Send feedback" onPress={() => router.push('/feedback')}>
             <MessageSquare size={20} color={c.text} />
           </IconButton>
@@ -137,44 +141,30 @@ export default function Courses() {
           }}
         />
         <Gap h={16} />
-        {newSem === null ? (
-          <View style={{ gap: 10 }}>
-            <SmallButton title="New semester" onPress={() => setNewSem(defaultSemesterName())} />
-            {semester && semester.status === 'active' ? (
-              <SmallButton
-                title={`Archive ${semester.name}`}
-                onPress={() =>
-                  Alert.alert(`Archive ${semester.name}?`, 'Its courses will be finished: no more alarms or prompts.', [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Archive',
-                      style: 'destructive',
-                      onPress: () => {
-                        archiveSemester(semester.id);
-                        setSemSheet(false);
-                      },
+        <View style={{ gap: 10 }}>
+          <SmallButton title="New semester" onPress={() => { setSemSheet(false); setEditSem('new'); }} />
+          {semester ? <SmallButton title={`Edit ${semester.name}`} onPress={() => { setSemSheet(false); setEditSem(semester.id); }} /> : null}
+          {semester && semester.status === 'active' ? (
+            <SmallButton
+              title={`Archive ${semester.name}`}
+              onPress={() =>
+                Alert.alert(`Archive ${semester.name}?`, 'Its courses will be finished: no more alarms or prompts.', [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Archive',
+                    style: 'destructive',
+                    onPress: () => {
+                      archiveSemester(semester.id);
+                      setSemSheet(false);
                     },
-                  ])
-                }
-              />
-            ) : null}
-          </View>
-        ) : (
-          <View style={{ gap: 12 }}>
-            <Input value={newSem} onChangeText={setNewSem} autoFocus accessibilityLabel="Semester name" />
-            <PillButton
-              title="Create"
-              disabled={!newSem.trim()}
-              onPress={() => {
-                const y = new Date().getFullYear();
-                createSemester(newSem.trim(), `${y}-01-01`, `${y}-12-31`, true);
-                setNewSem(null);
-                setSemSheet(false);
-              }}
+                  },
+                ])
+              }
             />
-          </View>
-        )}
+          ) : null}
+        </View>
       </Sheet>
+      <SemesterEditor visible={editSem !== null} onClose={() => setEditSem(null)} semester={editSem && editSem !== 'new' ? (semesters.find((x) => x.id === editSem) ?? null) : null} />
     </Screen>
   );
 }

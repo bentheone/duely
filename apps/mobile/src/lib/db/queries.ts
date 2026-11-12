@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { and, asc, eq, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import type {
   Assignment,
@@ -7,6 +7,7 @@ import type {
   Course,
   Exam,
   FileAttachment,
+  Lecture,
   MissedCheckLog,
   Semester,
   Session,
@@ -94,7 +95,17 @@ export function useClassSessions(): ClassSession[] {
   return useRows<ClassSession>(db.select().from(s.classSessions).where(isNull(s.classSessions.deletedAt)).orderBy(asc(s.classSessions.start)));
 }
 
-export function useFiles(ownerType: 'assignment' | 'exam', ownerId: string | undefined): FileAttachment[] {
+export function useLectures(): Lecture[] {
+  const db = getDb();
+  return useRows<Lecture>(db.select().from(s.lectures).where(isNull(s.lectures.deletedAt)).orderBy(desc(s.lectures.at)));
+}
+
+export function useLecture(id: string | undefined): Lecture | null {
+  const db = getDb();
+  return useRows<Lecture>(db.select().from(s.lectures).where(eq(s.lectures.id, id ?? '')), [id])[0] ?? null;
+}
+
+export function useFiles(ownerType: 'assignment' | 'exam' | 'lecture', ownerId: string | undefined): FileAttachment[] {
   const db = getDb();
   return useRows<FileAttachment>(
     db
@@ -130,5 +141,6 @@ export function snapshot() {
     classSessions: db.select().from(s.classSessions).where(isNull(s.classSessions.deletedAt)).all() as unknown as ClassSession[],
     missedChecks: db.select().from(s.missedChecks).where(isNull(s.missedChecks.deletedAt)).all() as unknown as MissedCheckLog[],
     files: db.select().from(s.files).where(isNull(s.files.deletedAt)).all() as unknown as FileAttachment[],
+    lectures: db.select().from(s.lectures).where(isNull(s.lectures.deletedAt)).all() as unknown as Lecture[],
   };
 }

@@ -7,6 +7,7 @@ import {
   formatHHMM,
   matchCourse,
   uuidv7,
+  zonedDayAt,
   zonedParts,
   type Assignment,
   type ClassSession,
@@ -20,6 +21,7 @@ import {
   ClassSessionModel,
   CourseModel,
   IntegrationAccountModel,
+  SemesterModel,
   SessionModel,
   SubtaskModel,
   UserModel,
@@ -28,6 +30,8 @@ import {
   toRecord,
   type IntegrationAccountDoc,
 } from '../db/models';
+import { sha1 } from '../common/crypto';
+import { DUELY_SOURCE } from '../sync/schedule';
 import { GOOGLE_API_FACTORY, type GEvent, type GoogleApi, type GoogleApiFactory } from './google.client';
 
 export const DUELY_CALENDAR_NAME = 'Duely';
@@ -73,6 +77,7 @@ export class GoogleSyncService {
 
     await this.syncTimetable(userId, acc, api, courses, summary);
     await this.syncDuelyCalendar(userId, acc, api, courses, tz, summary);
+    await this.syncCourseSchedules(userId, acc, api, courses, tz);
     await this.syncTasks(userId, acc, api, courses, tz, summary);
 
     await IntegrationAccountModel.updateOne({ _id: acc._id }, { $set: { lastSyncAt: startedAt } });
@@ -94,7 +99,8 @@ export class GoogleSyncService {
     const to = now + CLASS_SESSION_HORIZON_DAYS * DAY;
     const seen = new Set<string>();
     const unmatched = new Map<string, GoogleSyncSummary['unmatchedEvents'][number]>();
-    const existing = await ClassSessionModel.find({ userId, deletedAt: null }).lean();
+    // Class times typed into Duely (sourceCalendarId 'duely') aren't Google's to delete.
+    const existing = await ClassSessionModel.find({ userId, deletedAt: null, sourceCalendarId: { $ne: DUELY_SOURCE } }).lean();
     const byEvent = new Map(existing.map((e) => [String(e.googleEventId), rec<ClassSession>(e)]));
 
     for (const calId of acc.timetableCalendarIds) {
@@ -222,6 +228,54 @@ export class GoogleSyncService {
         await api.patchEvent(calId, s.googleEventId, ev, tz);
       }
       summary.sessionsWritten++;
+    }
+  }
+
+  // ---------- Course class times → recurring events on the Duely calendar ----------
+
+  async syncCourseSchedules(userId: string, acc: IntegrationAccountDoc, api: GoogleApi, courses: Course[], tz: string): Promise<void> {
+    const relevant = courses.filter((c) => c.scheduleToGoogle || c.scheduleGoogleEventIds?.length);
+    if (!relevant.length) return;
+    const calId = await this.ensureDuelyCalendar(acc, api, tz);
+    const semesters = new Map(
+      (await SemesterModel.find({ userId, deletedAt: null }).lean()).map((s) => [String(s._id), s as unknown as { startsOn: string; endsOn: string }]),
+    );
+    for (const c of relevant) {
+      const sem = semesters.get(c.semesterId);
+      const slots = c.schedule ?? [];
+      const want = !!c.scheduleToGoogle && !c.deletedAt && c.status === 'active' && slots.length > 0 && !!sem;
+      const hash = want ? sha1(JSON.stringify([slots, sem!.startsOn, sem!.endsOn, c.shortName, c.room, c.color, c.scheduleRev ?? 0, tz])) : null;
+      if (hash === (c.scheduleGoogleHash ?? null)) continue;
+      for (const id of c.scheduleGoogleEventIds ?? []) await api.deleteEvent(calId, id).catch(() => undefined);
+      const ids: string[] = [];
+      if (want) {
+        const now = Date.now();
+        const semStart = zonedDayAt(isoNoon(sem!.startsOn), tz, 0, '00:00');
+        const from = Math.max(semStart, zonedDayAt(now, tz, 0, '00:00'));
+        const until = sem!.endsOn.replace(/-/g, '') + 'T235959Z';
+        for (const slot of slots) {
+          // First matching weekday on/after `from`.
+          const offset = (slot.weekday - zonedParts(from, tz).weekday + 7) % 7;
+          const start = zonedDayAt(from, tz, offset, slot.start);
+          let end = zonedDayAt(from, tz, offset, slot.end);
+          if (end <= start) end = start + 3600_000;
+          const ev = await api.insertEvent(
+            calId,
+            {
+              summary: c.shortName,
+              description: [c.title, c.code].filter(Boolean).join(' · ') || null,
+              location: slot.room || c.room || null,
+              start,
+              end,
+              colorId: closestGoogleColorId(c.color),
+              recurrence: [`RRULE:FREQ=WEEKLY;UNTIL=${until}`],
+            },
+            tz,
+          );
+          ids.push(ev.id);
+        }
+      }
+      await serverUpdate('courses', userId, c.id, { scheduleGoogleEventIds: ids, scheduleGoogleHash: hash });
     }
   }
 
@@ -373,3 +427,5 @@ export class GoogleSyncService {
   }
 }
 
+
+const isoNoon = (d: string) => Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10), 12);

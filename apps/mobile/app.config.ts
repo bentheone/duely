@@ -61,6 +61,15 @@ const config: ExpoConfig = {
       },
     ],
     ['duely-alarm', { useExactAlarm: true }],
+    ['expo-audio', { microphonePermission: 'Duely records voice notes for your lectures.' }],
+    [
+      'expo-image-picker',
+      {
+        photosPermission: 'Duely adds photos to your lecture notes.',
+        cameraPermission: 'Duely takes photos of the board for your lecture notes.',
+        microphonePermission: false,
+      },
+    ],
     [
       'react-native-android-widget',
       {

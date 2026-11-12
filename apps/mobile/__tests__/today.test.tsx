@@ -54,7 +54,8 @@ describe('<TodayView />', () => {
     const onAdd = jest.fn();
     const onNo = jest.fn();
     await render(
-      <TodayView now={NOW} tz={TZ} items={items} classEnded={classEnded} onOpen={jest.fn()} onAvatar={jest.fn()} onAdd={onAdd} onNo={onNo} />,
+      <TodayView now={NOW} tz={TZ} items={items} classEnded={classEnded} onOpen={jest.fn()} onCalendar={jest.fn()}
+        onAvatar={jest.fn()} onAdd={onAdd} onNo={onNo} />,
     );
     expect(screen.getByText('Tuesday')).toBeTruthy();
     expect(screen.getByText('10 Nov')).toBeTruthy();
@@ -66,7 +67,8 @@ describe('<TodayView />', () => {
   });
 
   test('empty state', async () => {
-    await render(<TodayView now={NOW} tz={TZ} items={[]} classEnded={null} onOpen={jest.fn()} onAvatar={jest.fn()} onAdd={jest.fn()} onNo={jest.fn()} />);
+    await render(<TodayView now={NOW} tz={TZ} items={[]} classEnded={null} onOpen={jest.fn()} onCalendar={jest.fn()}
+        onAvatar={jest.fn()} onAdd={jest.fn()} onNo={jest.fn()} />);
     expect(screen.getByText('Nothing today.')).toBeTruthy();
   });
 });

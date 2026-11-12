@@ -5,10 +5,12 @@ import { api, ApiError, getTokens } from '../api';
 import { getRawDb } from '../db/client';
 import { applyRemote, emitChange, getMeta, onDataChange, setMeta, setMetaJson } from '../db/repo';
 import { useApp } from '../store';
+import { TABLES } from '../db/schema';
 import { snapshot } from '../db/queries';
 import { pickSemester } from '../semester';
 
 const PUSH_BATCH = 200;
+const KNOWN_TABLES = Object.keys(TABLES).join(',');
 const GOOGLE_MIN_INTERVAL = 5 * 60 * 1000;
 
 let running: Promise<void> | null = null;
@@ -66,10 +68,11 @@ async function pull(): Promise<boolean> {
   let since = Number(getMeta('lastPulledRev') ?? 0);
   let changed = false;
   for (;;) {
-    const res = await api<PullResponse>(`/sync/pull?since=${since}`);
+    const res = await api<PullResponse>(`/sync/pull?since=${since}&tables=${KNOWN_TABLES}`);
     if (res.changes.length) {
       getRawDb().withTransactionSync(() => {
-        for (const ch of res.changes) applyRemote(ch.table as SyncTable, ch.record as never);
+        // Skip tables a newer server might add that this app version can't store.
+        for (const ch of res.changes) if (ch.table in TABLES) applyRemote(ch.table as SyncTable, ch.record as never);
       });
       changed = true;
     }

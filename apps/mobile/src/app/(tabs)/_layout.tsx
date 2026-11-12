@@ -4,24 +4,24 @@ import { Tabs, type BottomTabBarProps } from 'expo-router/tabs';
 import { Redirect, router, type ErrorBoundaryProps } from 'expo-router';
 import { ErrorScreen } from '@/components/ErrorScreen';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BookOpen, CalendarDays, GraduationCap, House, Plus } from 'lucide-react-native';
+import { BookOpen, GraduationCap, House, NotebookPen, Plus } from 'lucide-react-native';
 import { useTheme } from '@/lib/theme';
 import { useApp } from '@/lib/store';
 
 const ICONS: Record<string, { Icon: typeof House; label: string }> = {
   today: { Icon: House, label: 'Today' },
   assignments: { Icon: BookOpen, label: 'Assignments' },
-  calendar: { Icon: CalendarDays, label: 'Calendar' },
+  lectures: { Icon: NotebookPen, label: 'Lectures' },
   exams: { Icon: GraduationCap, label: 'Exams' },
 };
 
 const TAB_BAR = { height: 64, gap: 12, side: 20 };
-const SLOT_ORDER = ['today', 'assignments', '+', 'calendar', 'exams'] as const;
+const SLOT_ORDER = ['today', 'assignments', '+', 'lectures', 'exams'] as const;
 const PILL_W = 52;
 const PILL_H = 44;
 
 /**
- * Floating, icon-only bar: Today · Assignments · (+) · Calendar · Exams (§11.3).
+ * Floating, icon-only bar: Today · Assignments · (+) · Lectures · Exams (Calendar lives on Today).
  * Active tab: a soft pill slides behind the icon (ink) with the brand's small accent dot under it.
  */
 function TabBar({ state, navigateToTab }: BottomTabBarProps) {
@@ -57,9 +57,6 @@ function TabBar({ state, navigateToTab }: BottomTabBarProps) {
 
   const pillStyle = { transform: [{ translateX: x }] };
 
-  // Calendar's "plan sessions" mode has its own footer — the floating bar would cover it.
-  const params = (active?.params ?? {}) as { assignmentId?: string; examId?: string };
-  if (activeName === 'calendar' && (params.assignmentId || params.examId)) return null;
 
   const dark = scheme === 'dark';
   return (
@@ -163,7 +160,7 @@ export default function TabsLayout() {
     <Tabs screenOptions={{ headerShown: false }} tabBar={(p) => <TabBar {...p} />}>
       <Tabs.Screen name="today" />
       <Tabs.Screen name="assignments" />
-      <Tabs.Screen name="calendar" />
+      <Tabs.Screen name="lectures" />
       <Tabs.Screen name="exams" />
     </Tabs>
   );
